@@ -101,9 +101,13 @@ RUN apk add --no-cache nodejs npm
 
 ARG VITE_APP_NAME=TryPost
 ARG VITE_REVERB_APP_KEY=
-ARG VITE_REVERB_HOST=localhost
-ARG VITE_REVERB_PORT=8080
-ARG VITE_REVERB_SCHEME=http
+# Empty by default: the production bundle derives the Reverb WS endpoint from the
+# page's own host at runtime (resources/js/echo.ts), so one image works for every
+# host. Set these only to pin a fixed/dedicated Reverb host. Dev (npm run dev)
+# reads .env and is unaffected.
+ARG VITE_REVERB_HOST=
+ARG VITE_REVERB_PORT=
+ARG VITE_REVERB_SCHEME=
 ARG VITE_POSTHOG_ENABLED=false
 ARG VITE_POSTHOG_API_KEY=
 ARG VITE_POSTHOG_HOST=https://us.i.posthog.com
