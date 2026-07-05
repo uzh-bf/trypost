@@ -63,8 +63,19 @@ jobs:
           target: production
           platforms: ${{ matrix.platform }}
           labels: ${{ steps.meta.outputs.labels }}
+          # Fork-specific: bake the real Reverb WebSocket endpoint into the
+          # frontend bundle. Vite inlines VITE_* at build time and the image has
+          # no runtime override (echo.ts reads import.meta.env; entrypoint does
+          # not rewrite built assets), so upstream's localhost:8080/http default
+          # leaves realtime broken on any non-localhost deployment. The app key
+          # is a public client key, not a secret. NOTE: HOST/PORT/SCHEME are
+          # environment-specific here; a runtime-configurable WS endpoint is the
+          # intended clean upstream contribution.
           build-args: |
             VITE_REVERB_APP_KEY=trypost-reverb-key
+            VITE_REVERB_HOST=trypost.stg.df-app.ch
+            VITE_REVERB_PORT=443
+            VITE_REVERB_SCHEME=https
           cache-from: type=gha,scope=${{ env.PLATFORM_PAIR }}
           cache-to: type=gha,mode=max,scope=${{ env.PLATFORM_PAIR }}
           outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
