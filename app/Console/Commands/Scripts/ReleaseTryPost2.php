@@ -51,6 +51,7 @@ use Throwable;
     {--backfill-delay=0 : Seconds between analytics backfill batches}
     {--include-unsubscribed : Also backfill workspaces Cashier does not see as subscribed}
     {--rerun-backfill : Dispatch the analytics backfill again even if an earlier run already did}
+    {--skip-external-analytics : Skip provider-side analytics backfill and account publication discovery}
     {--adoption-timeout=21600 : Seconds to wait for the queued library adoption before moving on (its jobs keep going)}')]
 #[Description('Run the one-off data steps of the TryPost 2.0 release (safe to run again). Rehearse on a copy only with its own bucket, or with --dry-run')]
 class ReleaseTryPost2 extends Command
@@ -119,8 +120,22 @@ class ReleaseTryPost2 extends Command
         }
 
         $this->channelDefaults();
-        $this->backfill("analytics:backfill-existing --chunk={$chunk} --delay={$delay}{$unsubscribed}");
-        $this->runReleaseStep('Instagram stories discovery (queued)', "analytics:dispatch-publication-discovery --platform={$instagram} --platform={$instagramFacebook}");
+
+        if ($this->option('skip-external-analytics')) {
+            $title = 'Analytics backfill and external posts import (queued)';
+            $this->heading($title);
+            $this->line('  Skipped: --skip-external-analytics.');
+            $this->summary[] = [$title, 'skipped', '--skip-external-analytics'];
+
+            $title = 'Instagram stories discovery (queued)';
+            $this->heading($title);
+            $this->line('  Skipped: --skip-external-analytics.');
+            $this->summary[] = [$title, 'skipped', '--skip-external-analytics'];
+        } else {
+            $this->backfill("analytics:backfill-existing --chunk={$chunk} --delay={$delay}{$unsubscribed}");
+            $this->runReleaseStep('Instagram stories discovery (queued)', "analytics:dispatch-publication-discovery --platform={$instagram} --platform={$instagramFacebook}");
+        }
+
         $unexpected = $this->audit($before);
 
         $this->newLine();

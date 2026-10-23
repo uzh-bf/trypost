@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 use App\Actions\Media\AdoptWorkspaceLibrary;
 use App\Console\Commands\Scripts\ReleaseTryPost2;
+use App\Enums\Analytics\SyncCollector;
+use App\Enums\Analytics\SyncStatus;
 use App\Enums\Post\Status;
 use App\Enums\PostPlatform\ContentType;
 use App\Enums\PostPlatform\Status as PostPlatformStatus;
@@ -15,6 +17,7 @@ use App\Jobs\Analytics\DiscoverAccountPublications;
 use App\Jobs\Media\AdoptWorkspaceLibraryJob;
 use App\Jobs\Media\DeleteMediaFiles;
 use App\Models\AnalyticsPublication;
+use App\Models\AnalyticsSyncState;
 use App\Models\Media;
 use App\Models\Post;
 use App\Models\PostNote;
@@ -234,6 +237,50 @@ test('a full run executes the steps in order, waits for the queued adoption and 
     runRelease(['--include-unsubscribed' => true, '--rerun-backfill' => true]);
 
     Queue::assertPushed(BootstrapAccountAnalytics::class, 4);
+});
+
+test('a full run can skip both external analytics paths while local release steps still execute', function () {
+    $asset = releaseLibraryAsset($this->workspace);
+    releaseLegacyPost($this->workspace, $asset);
+    $orphan = releaseOrphanedPost($this->workspace);
+
+    $backfillAccount = SocialAccount::factory()->instagram()->create(['workspace_id' => $this->workspace->id]);
+    $published = PostPlatform::factory()->instagram()->published()->create([
+        'social_account_id' => $backfillAccount->id,
+        'platform' => $backfillAccount->platform,
+    ]);
+    $published->post->update(['workspace_id' => $this->workspace->id]);
+
+    $discoveryAccount = SocialAccount::factory()->instagram()->create(['workspace_id' => $this->workspace->id]);
+    AnalyticsSyncState::factory()->create([
+        ...AnalyticsSyncState::identityFor($discoveryAccount),
+        'social_account_id' => $discoveryAccount->id,
+        'collector' => SyncCollector::PublicationBackfill,
+        'status' => SyncStatus::Complete,
+    ]);
+    AnalyticsSyncState::factory()->create([
+        ...AnalyticsSyncState::identityFor($discoveryAccount),
+        'social_account_id' => $discoveryAccount->id,
+        'collector' => SyncCollector::PublicationDiscovery,
+    ]);
+
+    releaseFakeQueue();
+    Cache::store('database')->forget(ReleaseTryPost2::BACKFILL_DISPATCHED_KEY);
+
+    [$code, $output] = runRelease(['--include-unsubscribed' => true, '--skip-external-analytics' => true]);
+
+    expect($code)->toBe(Command::SUCCESS, $output)
+        ->and(Post::query()->whereKey($orphan->id)->exists())->toBeFalse()
+        ->and(Media::query()->whereKey($asset->id)->exists())->toBeFalse()
+        ->and(Post::query()->where('workspace_id', $this->workspace->id)->where('status', Status::Scheduled)->count())->toBe(2)
+        ->and(Media::query()->where('workspace_id', $this->workspace->id)->count())->toBe(2);
+
+    Queue::assertNotPushed(BackfillTryPostPublications::class);
+    Queue::assertNotPushed(BootstrapAccountAnalytics::class);
+    Queue::assertNotPushed(CollectAccountDailySnapshot::class);
+    Queue::assertNotPushed(DiscoverAccountPublications::class);
+
+    expect(Cache::store('database')->get(ReleaseTryPost2::BACKFILL_DISPATCHED_KEY))->toBeNull();
 });
 
 test('the adoption dispatches one job per workspace on its own queue and waits until every library is adopted', function () {
