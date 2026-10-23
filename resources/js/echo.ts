@@ -12,7 +12,7 @@ const envScheme = import.meta.env.VITE_REVERB_SCHEME || undefined;
 
 const scheme = envScheme ?? (loc?.protocol === 'https:' ? 'https' : 'http');
 const host = envHost ?? loc?.hostname ?? 'localhost';
-const port = Number(envPort ?? (scheme === 'https' ? 443 : 80));
+const port = Number(envPort ?? (loc?.port || (scheme === 'https' ? 443 : 80)));
 
 configureEcho({
     broadcaster: 'reverb',
