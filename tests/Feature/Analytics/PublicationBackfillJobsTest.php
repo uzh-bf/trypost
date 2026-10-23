@@ -266,8 +266,22 @@ test('disabled publication history leaves queued syncs and their data untouched'
     $collectors = Mockery::mock(PublicationHistoryCollectorFactory::class);
     $collectors->shouldNotReceive('for');
 
-    app()->call([new BackfillAccountPublications($account->id, $backfill->id), 'handle'], ['collectors' => $collectors]);
-    app()->call([new DiscoverAccountPublications($account->id, $discovery->id), 'handle'], ['collectors' => $collectors]);
+    $queries = [];
+    DB::listen(function ($query) use (&$queries): void {
+        $queries[] = $query->sql;
+    });
+
+    foreach ([
+        new BackfillAccountPublications($account->id, $backfill->id),
+        new DiscoverAccountPublications($account->id, $discovery->id),
+    ] as $job) {
+        expect($job->middleware())->toBe([])
+            ->and($job->analyticsRateLimits())->toBe([]);
+        app()->call([$job, 'handle'], ['collectors' => $collectors]);
+        $job->failed(new RuntimeException('synthetic terminal worker failure'));
+    }
+
+    expect($queries)->toBe([]);
     $freshPublication = $publication->fresh();
     $freshPost = $post->fresh();
 

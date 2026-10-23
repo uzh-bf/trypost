@@ -53,6 +53,10 @@ abstract class AbstractPublicationSync implements ShouldQueue
     /** @return list<object> */
     public function middleware(): array
     {
+        if (! config('trypost.analytics.publication_history_enabled')) {
+            return [];
+        }
+
         return [
             new RateLimited('analytics-publications'),
             (new WithoutOverlapping("analytics-{$this->collector()->value}:{$this->socialAccountId}"))
@@ -64,6 +68,10 @@ abstract class AbstractPublicationSync implements ShouldQueue
     /** @return list<Limit> */
     public function analyticsRateLimits(): array
     {
+        if (! config('trypost.analytics.publication_history_enabled')) {
+            return [];
+        }
+
         return AnalyticsRateLimits::for(SocialAccount::query()->find($this->socialAccountId));
     }
 
@@ -139,6 +147,10 @@ abstract class AbstractPublicationSync implements ShouldQueue
 
     public function failed(?Throwable $exception): void
     {
+        if (! config('trypost.analytics.publication_history_enabled')) {
+            return;
+        }
+
         $state = AnalyticsSyncState::query()->find($this->syncStateId);
         $account = SocialAccount::query()->find($this->socialAccountId);
 
