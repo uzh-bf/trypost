@@ -50,6 +50,10 @@ class BootstrapAccountAnalytics implements ShouldQueue
 
     public function handleFor(string $socialAccountId): void
     {
+        if (! config('trypost.analytics.publication_history_enabled')) {
+            return;
+        }
+
         $account = SocialAccount::query()
             ->connected()
             ->includedInAnalytics()

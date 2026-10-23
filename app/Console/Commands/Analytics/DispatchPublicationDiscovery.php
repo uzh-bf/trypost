@@ -21,6 +21,10 @@ class DispatchPublicationDiscovery extends Command
 {
     public function handle(): int
     {
+        if (! config('trypost.analytics.publication_history_enabled')) {
+            return self::SUCCESS;
+        }
+
         $staleBefore = CarbonImmutable::now('UTC')->subHours(2);
 
         $only = (array) $this->option('platform');

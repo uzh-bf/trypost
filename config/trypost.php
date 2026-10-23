@@ -208,6 +208,10 @@ return [
     | Analytics publication discovery
     |--------------------------------------------------------------------------
     |
+    | Set `publication_history_enabled` to false to keep metric collection
+    | for known publications without calling provider publication-history or
+    | external-publication discovery APIs.
+    |
     | Discovery looks for new posts on every channel every
     | `discovery_interval_hours` (X separately, since X bills each read), and
     | reads back `discovery_overlap_hours` from the newest post it has seen.
@@ -215,6 +219,7 @@ return [
     */
 
     'analytics' => [
+        'publication_history_enabled' => (bool) env('PUBLICATION_HISTORY_ENABLED', true),
         'discovery_interval_hours' => (int) env('PUBLICATION_DISCOVERY_INTERVAL_HOURS', 3),
         'x_discovery_interval_hours' => (int) env('X_PUBLICATION_DISCOVERY_INTERVAL_HOURS', 24),
         'discovery_overlap_hours' => (int) env('PUBLICATION_DISCOVERY_OVERLAP_HOURS', 6),
