@@ -187,6 +187,8 @@ test('bootstrap creates separate backfill and discovery states and dispatches th
     CarbonImmutable::setTestNow('2026-09-23 10:00:00 UTC');
     $account = SocialAccount::factory()->instagram()->create();
 
+    expect(config('trypost.analytics.publication_history_enabled'))->toBeTrue();
+
     (new BootstrapAccountAnalytics($account->id))->handleFor($account->id);
 
     $backfill = AnalyticsSyncState::query()->where('social_account_id', $account->id)
@@ -198,6 +200,122 @@ test('bootstrap creates separate backfill and discovery states and dispatches th
         ->and($backfill->target_since?->toDateString())->toBe('2025-09-23')
         ->and($discovery->status)->toBe(SyncStatus::Pending);
     Bus::assertDispatched(BackfillAccountPublications::class, fn ($job): bool => $job->socialAccountId === $account->id && $job->syncStateId === $backfill->id);
+});
+
+test('disabled publication history leaves a fresh bootstrap untouched', function () {
+    config()->set('trypost.analytics.publication_history_enabled', false);
+    $account = SocialAccount::factory()->instagram()->create();
+
+    Bus::fake();
+
+    (new BootstrapAccountAnalytics($account->id))->handleFor($account->id);
+
+    expect(AnalyticsSyncState::query()->count())->toBe(0);
+    Bus::assertNothingDispatched();
+});
+
+test('disabled publication history leaves queued syncs and their data untouched', function (SyncStatus $status) {
+    config()->set('trypost.analytics.publication_history_enabled', false);
+    $account = SocialAccount::factory()->instagram()->create();
+    $backfill = AnalyticsSyncState::factory()->create([
+        ...AnalyticsSyncState::identityFor($account),
+        'social_account_id' => $account->id,
+        'collector' => SyncCollector::PublicationBackfill,
+        'status' => $status,
+        'checkpoint' => ['cursor' => 'saved-page', 'revision' => 4],
+    ]);
+    $discovery = AnalyticsSyncState::factory()->create([
+        ...AnalyticsSyncState::identityFor($account),
+        'social_account_id' => $account->id,
+        'collector' => SyncCollector::PublicationDiscovery,
+        'status' => $status,
+        'checkpoint' => ['cursor' => 'saved-page', 'revision' => 4],
+    ]);
+    $publication = AnalyticsPublication::factory()->create([
+        'workspace_id' => $account->workspace_id,
+        'social_account_id' => $account->id,
+        'social_account_key' => $account->id,
+        'remote_id' => 'existing-publication',
+    ]);
+    $post = Post::withoutEvents(fn (): Post => Post::factory()->forAccount($account)->create());
+    $stateSnapshot = fn (AnalyticsSyncState $state): array => [
+        'status' => $state->status,
+        'checkpoint' => $state->checkpoint,
+        'last_error_category' => $state->last_error_category,
+        'updated_at' => $state->updated_at?->toISOString(),
+    ];
+    $publicationSnapshot = [
+        'social_account_id' => $publication->social_account_id,
+        'post_id' => $publication->post_id,
+        'remote_id' => $publication->remote_id,
+        'metric_failures' => $publication->metric_failures,
+        'updated_at' => $publication->updated_at?->toISOString(),
+    ];
+    $postSnapshot = [
+        'status' => $post->status,
+        'publish_status' => $post->publish_status,
+        'platform_post_id' => $post->platform_post_id,
+        'platform_url' => $post->platform_url,
+        'publication_updated_at' => $post->publication_updated_at?->toISOString(),
+        'updated_at' => $post->updated_at?->toISOString(),
+    ];
+
+    Bus::fake();
+    $collectors = Mockery::mock(PublicationHistoryCollectorFactory::class);
+    $collectors->shouldNotReceive('for');
+
+    app()->call([new BackfillAccountPublications($account->id, $backfill->id), 'handle'], ['collectors' => $collectors]);
+    app()->call([new DiscoverAccountPublications($account->id, $discovery->id), 'handle'], ['collectors' => $collectors]);
+    $freshPublication = $publication->fresh();
+    $freshPost = $post->fresh();
+
+    expect(AnalyticsSyncState::query()->count())->toBe(2)
+        ->and(AnalyticsPublication::query()->count())->toBe(1)
+        ->and(Post::query()->count())->toBe(1)
+        ->and($stateSnapshot($backfill->fresh()))->toBe($stateSnapshot($backfill))
+        ->and($stateSnapshot($discovery->fresh()))->toBe($stateSnapshot($discovery))
+        ->and($publicationSnapshot)->toBe([
+            'social_account_id' => $freshPublication->social_account_id,
+            'post_id' => $freshPublication->post_id,
+            'remote_id' => $freshPublication->remote_id,
+            'metric_failures' => $freshPublication->metric_failures,
+            'updated_at' => $freshPublication->updated_at?->toISOString(),
+        ])
+        ->and($postSnapshot)->toBe([
+            'status' => $freshPost->status,
+            'publish_status' => $freshPost->publish_status,
+            'platform_post_id' => $freshPost->platform_post_id,
+            'platform_url' => $freshPost->platform_url,
+            'publication_updated_at' => $freshPost->publication_updated_at?->toISOString(),
+            'updated_at' => $freshPost->updated_at?->toISOString(),
+        ]);
+    Bus::assertNothingDispatched();
+})->with([
+    'pending' => [SyncStatus::Pending],
+    'running' => [SyncStatus::Running],
+]);
+
+test('disabled publication history dispatches no bootstrap or discovery jobs', function () {
+    config()->set('trypost.analytics.publication_history_enabled', false);
+    SocialAccount::factory()->instagram()->create();
+    $ready = SocialAccount::factory()->instagram()->create();
+    AnalyticsSyncState::factory()->create([
+        ...AnalyticsSyncState::identityFor($ready),
+        'social_account_id' => $ready->id,
+        'collector' => SyncCollector::PublicationBackfill,
+        'status' => SyncStatus::Complete,
+    ]);
+    AnalyticsSyncState::factory()->create([
+        ...AnalyticsSyncState::identityFor($ready),
+        'social_account_id' => $ready->id,
+        'collector' => SyncCollector::PublicationDiscovery,
+    ]);
+
+    Bus::fake();
+
+    $this->artisan('analytics:dispatch-publication-discovery')->assertSuccessful();
+
+    Bus::assertNothingDispatched();
 });
 
 test('bootstrap resumes a failed backfill from its last committed cursor', function () {

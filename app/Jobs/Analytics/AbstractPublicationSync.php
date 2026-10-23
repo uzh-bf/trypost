@@ -79,6 +79,10 @@ abstract class AbstractPublicationSync implements ShouldQueue
         QueuePublicationMetricsForPage $metrics,
         AnalyticsJobLog $log,
     ): void {
+        if (! config('trypost.analytics.publication_history_enabled')) {
+            return;
+        }
+
         $channel = SocialAccount::query()
             ->connected()
             ->includedInAnalytics()
