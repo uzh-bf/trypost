@@ -238,6 +238,8 @@ test('disabled publication history leaves queued syncs and their data untouched'
         'remote_id' => 'existing-publication',
     ]);
     $post = Post::withoutEvents(fn (): Post => Post::factory()->forAccount($account)->create());
+    $publication->refresh();
+    $post->refresh();
     $stateSnapshot = fn (AnalyticsSyncState $state): array => [
         'status' => $state->status,
         'checkpoint' => $state->checkpoint,
