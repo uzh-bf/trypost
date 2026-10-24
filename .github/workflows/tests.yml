@@ -2,9 +2,9 @@ name: Tests
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, develop, release/2.0.0-uzh]
   pull_request:
-    branches: [main, develop]
+    branches: [main, develop, release/2.0.0-uzh]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
