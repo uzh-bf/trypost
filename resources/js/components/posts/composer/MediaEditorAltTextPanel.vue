@@ -18,8 +18,10 @@ const props = defineProps<{
 const edit = defineModel<MediaEdit>('edit', { required: true });
 
 const page = usePage<AppPageProps>();
-const modelId = ref<string | null>(page.props.aiModels?.default ?? null);
-const http = useHttp({ media_id: '', model_id: null as string | null });
+const http = useHttp({
+    media_id: '',
+    model_id: (page.props.aiModels?.default ?? null) as string | null,
+});
 const generating = ref(false);
 const error = ref<string | null>(null);
 
@@ -29,7 +31,6 @@ const generate = async (): Promise<void> => {
     generating.value = true;
     error.value = null;
     http.media_id = props.mediaId;
-    http.model_id = modelId.value;
     try {
         const result = (await http.post(generateAltTextRoute.url())) as
             | { alt_text: string }
@@ -73,7 +74,7 @@ const generate = async (): Promise<void> => {
             :placeholder="$t('posts.composer.media_editor.alt_placeholder')"
         />
         <AiModelSelect
-            v-model="modelId"
+            v-model="http.model_id"
             capability="vision"
             test-id="media-editor-alt-model"
             :disabled="generating"

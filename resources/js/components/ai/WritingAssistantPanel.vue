@@ -56,7 +56,6 @@ const emit = defineEmits<{
 }>();
 
 const page = usePage<AppPageProps>();
-const modelId = ref<string | null>(page.props.aiModels?.default ?? null);
 
 const screen = ref<'actions' | 'prompt' | 'suggestion'>('actions');
 const prompt = ref('');
@@ -68,7 +67,7 @@ const error = ref('');
 const pendingMode = ref('generate');
 
 const http = useHttp({
-    model_id: null as string | null,
+    model_id: (page.props.aiModels?.default ?? null) as string | null,
     mode: '',
     prompt: '',
     current_content: '',
@@ -108,7 +107,6 @@ const request = async (
     busy.value = true;
     error.value = '';
     pendingMode.value = payload.mode;
-    http.model_id = modelId.value;
     http.mode = payload.mode;
     http.prompt = payload.prompt ?? '';
     http.current_content = payload.current_content ?? '';
@@ -185,7 +183,7 @@ const accept = (): void => {
         data-testid="writing-assistant-panel"
     >
         <AiModelSelect
-            v-model="modelId"
+            v-model="http.model_id"
             test-id="writing-assistant-model"
             :disabled="busy"
         />

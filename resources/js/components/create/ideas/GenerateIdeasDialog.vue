@@ -32,7 +32,6 @@ const emit = defineEmits<{
 }>();
 
 const page = usePage<AppPageProps>();
-const modelId = ref<string | null>(page.props.aiModels?.default ?? null);
 const open = ref(false);
 const error = ref('');
 const idea = ref<IdeaDraft | null>(null);
@@ -47,7 +46,7 @@ const http = useHttp<
     },
     IdeaDraft
 >({
-    model_id: null,
+    model_id: page.props.aiModels?.default ?? null,
     business: '',
     audience: '',
     notes: '',
@@ -62,7 +61,7 @@ watch(open, (isOpen) => {
     }
 
     error.value = '';
-    modelId.value = page.props.aiModels?.default ?? null;
+    http.model_id = page.props.aiModels?.default ?? null;
     idea.value = null;
     http.business = '';
     http.audience = '';
@@ -93,7 +92,6 @@ const submit = async (): Promise<void> => {
     error.value = '';
     http.cancel();
     const currentRequest = ++requestId;
-    http.model_id = modelId.value;
 
     try {
         const result = await http.post(generate.url());
@@ -172,7 +170,7 @@ const useIdea = (): void => {
             </DialogClose>
 
             <AiModelSelect
-                v-model="modelId"
+                v-model="http.model_id"
                 class="mx-6 my-3 sm:mx-0"
                 capability="structured"
                 test-id="ideas-generate-model"
