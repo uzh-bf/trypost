@@ -103,6 +103,7 @@ return [
         'assistant_suggestion' => '提案された文章',
         'assistant_back' => '戻る',
         'assistant_error' => '提案を生成できませんでした。もう一度お試しください。',
+        'ai_model_unavailable' => 'このAIモデルは利用できません。別のモデルを選んでください。',
         'assistant_modes' => [
             'generate' => '生成',
             'rephrase' => '言い換え',
@@ -230,6 +231,9 @@ return [
             'alt_generate' => 'AIで生成',
             'alt_generate_error' => '代替テキストを生成できませんでした。もう一度お試しください。',
             'alt_generate_image_only' => '代替テキストは画像に対してのみ生成できます。',
+            'alt_image_format' => 'AI代替テキストはJPEG、PNG、WebPに対応しています。GIFには対応していません。',
+            'alt_image_too_large' => 'AI代替テキストは3 MiBまでの画像に対応しています。',
+            'alt_image_missing' => 'ストレージから画像を読み取れませんでした。',
             'tags_heading' => 'ユーザーをタグ付け',
             'tags_start' => 'タグ付けを開始',
             'tags_finish' => 'タグ付けを終了',

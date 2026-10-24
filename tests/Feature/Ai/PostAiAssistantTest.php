@@ -20,6 +20,7 @@ use Laravel\Ai\Prompts\AgentPrompt;
 use Symfony\Component\HttpFoundation\Response;
 
 beforeEach(function () {
+    config(['ai_models.default' => null, 'ai.default' => 'openai', 'ai.providers.openai.key' => 'test-key']);
     $this->user = User::factory()->create();
     $this->workspace = Workspace::factory()->create(['user_id' => $this->user->id]);
     $this->workspace->members()->attach($this->user->id, membershipPivot('member'));

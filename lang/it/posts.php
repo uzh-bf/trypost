@@ -103,6 +103,7 @@ return [
         'assistant_suggestion' => 'Testo suggerito',
         'assistant_back' => 'Indietro',
         'assistant_error' => 'Impossibile generare un suggerimento. Riprova.',
+        'ai_model_unavailable' => 'Questo modello IA non è disponibile. Scegli un altro modello.',
         'assistant_modes' => [
             'generate' => 'Genera',
             'rephrase' => 'Riformula',
@@ -230,6 +231,9 @@ return [
             'alt_generate' => 'Genera con l\'IA',
             'alt_generate_error' => 'Impossibile generare il testo alternativo. Riprova.',
             'alt_generate_image_only' => 'Il testo alternativo può essere generato solo per le immagini.',
+            'alt_image_format' => 'Il testo alternativo IA supporta JPEG, PNG e WebP. GIF non è supportato.',
+            'alt_image_too_large' => 'Il testo alternativo IA supporta immagini fino a 3 MiB.',
+            'alt_image_missing' => 'Impossibile leggere l’immagine dall’archivio.',
             'tags_heading' => 'Tagga utenti',
             'tags_start' => 'Inizia a taggare',
             'tags_finish' => 'Termina tag',

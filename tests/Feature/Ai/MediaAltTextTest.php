@@ -8,12 +8,16 @@ use App\Models\Media;
 use App\Models\Post;
 use App\Models\User;
 use App\Models\Workspace;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Files\StoredImage;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Symfony\Component\HttpFoundation\Response;
 
 beforeEach(function () {
+    config(['ai_models.default' => null, 'ai.default' => 'openai', 'ai.providers.openai.key' => 'test-key']);
+    Storage::fake();
+    Media::created(fn (Media $media) => Storage::put($media->path, base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aWQAAAABJRU5ErkJggg==')));
     $this->user = User::factory()->create();
     $this->workspace = Workspace::factory()->create(['user_id' => $this->user->id]);
     $this->workspace->members()->attach($this->user->id, membershipPivot('member'));

@@ -10,6 +10,8 @@ use App\Services\Repurpose\CaptionAdapter;
 use App\Services\Social\ContentSanitizer;
 use Laravel\Ai\Prompts\AgentPrompt;
 
+beforeEach(fn () => config(['ai_models.default' => null, 'ai.default' => 'openai', 'ai.providers.openai.key' => 'test-key']));
+
 test('a caption that fits is returned untouched', function () {
     $workspace = Workspace::factory()->create();
     $caption = 'Short and sweet';

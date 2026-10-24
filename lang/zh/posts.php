@@ -103,6 +103,7 @@ return [
         'assistant_suggestion' => '建议文案',
         'assistant_back' => '返回',
         'assistant_error' => '无法生成建议，请重试。',
+        'ai_model_unavailable' => '此 AI 模型不可用。请选择其他模型。',
         'assistant_modes' => [
             'generate' => '生成',
             'rephrase' => '改写',
@@ -230,6 +231,9 @@ return [
             'alt_generate' => '使用 AI 生成',
             'alt_generate_error' => '无法生成替代文本，请重试。',
             'alt_generate_image_only' => '只能为图片生成替代文本。',
+            'alt_image_format' => 'AI 替代文本支持 JPEG、PNG 和 WebP，不支持 GIF。',
+            'alt_image_too_large' => 'AI 替代文本支持最大 3 MiB 的图像。',
+            'alt_image_missing' => '无法从存储中读取图像。',
             'tags_heading' => '标记用户',
             'tags_start' => '开始标记',
             'tags_finish' => '完成标记',

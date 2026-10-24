@@ -105,6 +105,7 @@ return [
         'assistant_suggestion' => 'Vorgeschlagener Text',
         'assistant_back' => 'Zurück',
         'assistant_error' => 'Der Vorschlag konnte nicht erstellt werden. Bitte versuche es erneut.',
+        'ai_model_unavailable' => 'Dieses KI-Modell ist nicht verfügbar. Wähle ein anderes Modell.',
         'assistant_modes' => [
             'generate' => 'Generieren',
             'rephrase' => 'Umformulieren',
@@ -232,6 +233,9 @@ return [
             'alt_generate' => 'Mit KI erstellen',
             'alt_generate_error' => 'Der Alternativtext konnte nicht erstellt werden. Bitte versuche es erneut.',
             'alt_generate_image_only' => 'Alternativtext kann nur für Bilder erstellt werden.',
+            'alt_image_format' => 'KI-Alternativtext unterstützt JPEG, PNG und WebP. GIF wird nicht unterstützt.',
+            'alt_image_too_large' => 'KI-Alternativtext unterstützt Bilder bis 3 MiB.',
+            'alt_image_missing' => 'Das Bild konnte nicht aus dem Speicher gelesen werden.',
             'tags_heading' => 'Nutzer markieren',
             'tags_start' => 'Markieren starten',
             'tags_finish' => 'Markieren beenden',

@@ -23,13 +23,19 @@ final class AssistPostContent
         ?string $prompt,
         ?string $previousContent,
         ?Platform $platform,
+        array $selection,
         ?SocialAccount $account = null,
     ): string {
         $platform = $account->platform ?? $platform;
         $limit = $account?->maxContentLength() ?? $platform?->maxContentLength();
 
         $response = (new PostWritingAssistant($mode, $currentContent, $user->locale, $platform, $previousContent, $limit))
-            ->prompt($mode->requiresPrompt() ? trim((string) $prompt) : 'Revise the existing caption as instructed.');
+            ->withModelSelection($selection)
+            ->prompt(
+                $mode->requiresPrompt() ? trim((string) $prompt) : 'Revise the existing caption as instructed.',
+                provider: $selection['provider'],
+                model: $selection['model'],
+            );
 
         $text = trim((string) $response);
 
@@ -40,7 +46,7 @@ final class AssistPostContent
         }
 
         return $platform instanceof Platform
-            ? app(CaptionAdapter::class)->adapt($workspace, $user, $text, $platform, $limit)
+            ? app(CaptionAdapter::class)->adapt($workspace, $user, $text, $platform, $limit, $selection)
             : $text;
     }
 }

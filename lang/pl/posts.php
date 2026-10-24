@@ -103,6 +103,7 @@ return [
         'assistant_suggestion' => 'Sugerowana treść',
         'assistant_back' => 'Wróć',
         'assistant_error' => 'Nie udało się wygenerować propozycji. Spróbuj ponownie.',
+        'ai_model_unavailable' => 'Ten model AI jest niedostępny. Wybierz inny model.',
         'assistant_modes' => [
             'generate' => 'Generuj',
             'rephrase' => 'Przeredaguj',
@@ -230,6 +231,9 @@ return [
             'alt_generate' => 'Wygeneruj z AI',
             'alt_generate_error' => 'Nie udało się wygenerować tekstu alternatywnego. Spróbuj ponownie.',
             'alt_generate_image_only' => 'Tekst alternatywny można wygenerować tylko dla zdjęć.',
+            'alt_image_format' => 'Tekst alternatywny AI obsługuje JPEG, PNG i WebP. GIF nie jest obsługiwany.',
+            'alt_image_too_large' => 'Tekst alternatywny AI obsługuje obrazy do 3 MiB.',
+            'alt_image_missing' => 'Nie udało się odczytać obrazu z magazynu.',
             'tags_heading' => 'Oznacz użytkowników',
             'tags_start' => 'Zacznij oznaczać',
             'tags_finish' => 'Zakończ oznaczanie',

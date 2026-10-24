@@ -103,6 +103,7 @@ return [
         'assistant_suggestion' => 'Suggested caption',
         'assistant_back' => 'Back',
         'assistant_error' => 'Could not generate a suggestion. Please try again.',
+        'ai_model_unavailable' => 'This AI model is unavailable. Choose another model.',
         'assistant_modes' => [
             'generate' => 'Generate',
             'rephrase' => 'Rephrase',
@@ -230,6 +231,9 @@ return [
             'alt_generate' => 'Generate with AI',
             'alt_generate_error' => 'Could not generate alt text. Please try again.',
             'alt_generate_image_only' => 'Alt text can only be generated for images.',
+            'alt_image_format' => 'AI alt text supports JPEG, PNG and WebP images. GIF is not supported.',
+            'alt_image_too_large' => 'AI alt text supports images up to 3 MiB.',
+            'alt_image_missing' => 'The image could not be read from storage.',
             'tags_heading' => 'Add User Tags',
             'tags_start' => 'Start tagging',
             'tags_finish' => 'Finish tagging',

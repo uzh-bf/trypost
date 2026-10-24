@@ -4,14 +4,17 @@ declare(strict_types=1);
 
 namespace App\Ai\Agents;
 
-use Laravel\Ai\Attributes\Temperature;
+use App\Ai\Agents\Concerns\UsesAiModelSelection;
 use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Promptable;
 
-#[Temperature(0.2)]
-class PostContentShortener implements Agent
+class PostContentShortener implements Agent, HasProviderOptions
 {
     use Promptable;
+    use UsesAiModelSelection;
+
+    private const float TEMPERATURE = 0.2;
 
     public function __construct(
         public string $platformLabel,

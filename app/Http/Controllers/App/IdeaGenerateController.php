@@ -7,6 +7,7 @@ namespace App\Http\Controllers\App;
 use App\Actions\Idea\GenerateIdea;
 use App\Http\Requests\App\Idea\GenerateIdeaRequest;
 use App\Http\Resources\App\GeneratedIdeaResource;
+use App\Support\Ai\AiModelCatalog;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\JsonResponse;
@@ -23,12 +24,15 @@ class IdeaGenerateController extends Controller
             return response()->json(['message' => $gate->message()], Response::HTTP_PAYMENT_REQUIRED);
         }
 
+        $selection = app(AiModelCatalog::class)->resolve($request->validated('model_id'), 'structured');
+
         try {
             $idea = GenerateIdea::execute(
                 user: $request->user(),
                 business: $request->validated('business'),
                 audience: $request->validated('audience'),
                 notes: $request->validated('notes'),
+                selection: $selection,
             );
         } catch (AiException|RequestException|ConnectionException) {
             $idea = null;

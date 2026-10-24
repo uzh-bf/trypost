@@ -103,6 +103,7 @@ return [
         'assistant_suggestion' => 'Texte proposé',
         'assistant_back' => 'Retour',
         'assistant_error' => 'Impossible de générer une suggestion. Veuillez réessayer.',
+        'ai_model_unavailable' => 'Ce modèle IA est indisponible. Choisissez un autre modèle.',
         'assistant_modes' => [
             'generate' => 'Générer',
             'rephrase' => 'Reformuler',
@@ -230,6 +231,9 @@ return [
             'alt_generate' => 'Générer avec l\'IA',
             'alt_generate_error' => 'Impossible de générer le texte alternatif. Veuillez réessayer.',
             'alt_generate_image_only' => 'Le texte alternatif ne peut être généré que pour des images.',
+            'alt_image_format' => 'Le texte alternatif IA accepte JPEG, PNG et WebP. GIF n’est pas pris en charge.',
+            'alt_image_too_large' => 'Le texte alternatif IA accepte les images jusqu’à 3 Mio.',
+            'alt_image_missing' => 'Impossible de lire l’image depuis le stockage.',
             'tags_heading' => 'Identifier des utilisateurs',
             'tags_start' => 'Commencer l’identification',
             'tags_finish' => 'Terminer l’identification',

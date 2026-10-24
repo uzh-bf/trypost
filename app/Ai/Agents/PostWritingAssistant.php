@@ -4,17 +4,20 @@ declare(strict_types=1);
 
 namespace App\Ai\Agents;
 
+use App\Ai\Agents\Concerns\UsesAiModelSelection;
 use App\Enums\Ai\PostAssistantMode;
 use App\Enums\SocialAccount\Platform;
 use App\Enums\User\Locale;
-use Laravel\Ai\Attributes\Temperature;
 use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Promptable;
 
-#[Temperature(0.7)]
-class PostWritingAssistant implements Agent
+class PostWritingAssistant implements Agent, HasProviderOptions
 {
     use Promptable;
+    use UsesAiModelSelection;
+
+    private const float TEMPERATURE = 0.7;
 
     public function __construct(
         public PostAssistantMode $mode,

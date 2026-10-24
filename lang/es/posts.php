@@ -103,6 +103,7 @@ return [
         'assistant_suggestion' => 'Texto sugerido',
         'assistant_back' => 'Volver',
         'assistant_error' => 'No se pudo generar una sugerencia. Inténtalo de nuevo.',
+        'ai_model_unavailable' => 'Este modelo de IA no está disponible. Elige otro modelo.',
         'assistant_modes' => [
             'generate' => 'Generar',
             'rephrase' => 'Reformular',
@@ -230,6 +231,9 @@ return [
             'alt_generate' => 'Generar con IA',
             'alt_generate_error' => 'No se pudo generar el texto alternativo. Inténtalo de nuevo.',
             'alt_generate_image_only' => 'El texto alternativo solo se puede generar para imágenes.',
+            'alt_image_format' => 'El texto alternativo con IA admite JPEG, PNG y WebP. No admite GIF.',
+            'alt_image_too_large' => 'El texto alternativo con IA admite imágenes de hasta 3 MiB.',
+            'alt_image_missing' => 'No se pudo leer la imagen del almacenamiento.',
             'tags_heading' => 'Etiquetar usuarios',
             'tags_start' => 'Empezar a etiquetar',
             'tags_finish' => 'Terminar de etiquetar',

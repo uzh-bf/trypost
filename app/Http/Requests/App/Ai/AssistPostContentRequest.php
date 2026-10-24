@@ -27,6 +27,7 @@ class AssistPostContentRequest extends FormRequest
         $mode = PostAssistantMode::tryFrom((string) $this->input('mode'));
 
         return [
+            'model_id' => ['nullable', 'string', 'max:64'],
             'mode' => ['required', Rule::enum(PostAssistantMode::class)],
             'prompt' => [
                 Rule::requiredIf(fn (): bool => $mode?->requiresPrompt() ?? false),
