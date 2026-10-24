@@ -106,7 +106,7 @@ class HandleInertiaRequests extends Middleware
                 'privacy' => (string) config('trypost.legal.privacy_url'),
             ],
             'languages' => fn (): array => Locale::options(),
-            'aiEnabled' => fn (): bool => $user !== null && app(AiModelCatalog::class)->forFrontend()['options'] !== [],
+            'aiEnabled' => fn (): bool => app(AiModelCatalog::class)->forFrontend()['options'] !== [],
             'googleAuthEnabled' => fn (): bool => SocialAuthProvider::Google->isEnabled(),
             'githubAuthEnabled' => fn (): bool => SocialAuthProvider::GitHub->isEnabled(),
             ...($user !== null ? [

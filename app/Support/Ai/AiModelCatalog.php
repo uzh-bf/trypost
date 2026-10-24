@@ -93,8 +93,12 @@ final class AiModelCatalog
 
         $driver = data_get($connection, 'driver');
         $keyless = in_array($driver, ['ollama', 'openai-compatible'], true);
+        $legacyBedrockCredentials = $legacy && $driver === 'bedrock' && (
+            ($connection['use_default_credential_provider'] ?? true)
+            || (filled(data_get($connection, 'access_key_id')) && filled(data_get($connection, 'secret_access_key')))
+        );
 
-        if ((! $keyless && blank(data_get($connection, 'key')))
+        if ((! $keyless && ! $legacyBedrockCredentials && blank(data_get($connection, 'key')))
             || (($provider === 'litellm' || $keyless) && blank(data_get($connection, 'url')))) {
             return null;
         }

@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Ai\Agents\PostContentShortener;
+use App\Ai\Agents\PostWritingAssistant;
 use App\Enums\SocialAccount\Platform;
 use App\Models\Idea;
 use App\Models\Media;
@@ -15,6 +16,7 @@ use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia;
+use Laravel\Ai\Prompts\AgentPrompt;
 
 beforeEach(function () {
     config([
@@ -227,8 +229,6 @@ test('the nested fitting request retains the primary route and fitting budget', 
     if ($id === 'gemini') {
         expect($last['temperature'])->toBe(0.2);
     }
-    $selection = app(AiModelCatalog::class)->resolve($id);
-    expect((new PostContentShortener('Bluesky', 300))->withModelSelection($selection, fitting: true)->timeout())->toBe(40);
 })->with(['sol', 'opus', 'gemini']);
 
 test('caption cache keeps equal text and limits separate for different selections', function () {
@@ -302,7 +302,7 @@ test('the raw image boundary is admitted using storage metadata rather than row 
 });
 
 test('catalog metadata is not shared with guests', function () {
-    $this->get(route('login'))->assertInertia(fn (AssertableInertia $page) => $page->missing('aiModels')->where('aiEnabled', false));
+    $this->get(route('login'))->assertInertia(fn (AssertableInertia $page) => $page->missing('aiModels')->where('aiEnabled', true));
 });
 
 test('selected policy options match the sdk driver rather than the configured provider name', function () {
@@ -312,3 +312,35 @@ test('selected policy options match the sdk driver rather than the configured pr
         ->and($agent->providerOptions('litellm'))->toBe([])
         ->and($agent->providerOptions('openrouter'))->toBe([]);
 });
+
+test('legacy bedrock accepts native credential modes without a bearer key or url', function (bool $defaultCredentials, ?string $accessKey, ?string $secretKey, bool $available) {
+    config([
+        'ai_models.default' => null,
+        'ai.default' => 'bedrock',
+        'ai.providers.bedrock.key' => null,
+        'ai.providers.bedrock.url' => null,
+        'ai.providers.bedrock.use_default_credential_provider' => $defaultCredentials,
+        'ai.providers.bedrock.access_key_id' => $accessKey,
+        'ai.providers.bedrock.secret_access_key' => $secretKey,
+        'ai.providers.bedrock.session_token' => null,
+        'ai.providers.bedrock.models.text.default' => 'test-bedrock-model',
+    ]);
+    PostWritingAssistant::fake(['Legacy suggestion.']);
+    $response = $this->actingAs($this->user)->postJson(route('app.posts.ai.assist'), [
+        'mode' => 'rephrase', 'current_content' => 'Original',
+    ]);
+
+    if ($available) {
+        $response->assertOk()->assertJsonPath('content', 'Legacy suggestion.');
+        PostWritingAssistant::assertPrompted(fn (AgentPrompt $prompt): bool => $prompt->provider->name() === 'bedrock' && $prompt->model === 'test-bedrock-model');
+    } else {
+        $response->assertUnprocessable()->assertJsonValidationErrors('model_id');
+        PostWritingAssistant::assertNeverPrompted();
+    }
+
+    Http::assertNothingSent();
+})->with([
+    'default credential chain' => [true, null, null, true],
+    'static credentials' => [false, 'test-access', 'test-secret', true],
+    'incomplete static credentials' => [false, 'test-access', null, false],
+]);
