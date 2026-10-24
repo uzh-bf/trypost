@@ -8,6 +8,7 @@ use App\Actions\Ai\AssistPostContent;
 use App\Enums\Ai\PostAssistantMode;
 use App\Enums\SocialAccount\Platform;
 use App\Http\Requests\App\Ai\AssistPostContentRequest;
+use App\Support\Ai\AiModelCatalog;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\JsonResponse;
@@ -28,6 +29,8 @@ class PostAiAssistantController extends Controller
             return response()->json(['message' => $gate->message()], Response::HTTP_PAYMENT_REQUIRED);
         }
 
+        $selection = app(AiModelCatalog::class)->resolve($request->validated('model_id'));
+
         try {
             $content = AssistPostContent::execute(
                 workspace: $workspace,
@@ -37,6 +40,7 @@ class PostAiAssistantController extends Controller
                 prompt: $request->input('prompt'),
                 previousContent: $request->input('previous_content'),
                 platform: $request->enum('platform', Platform::class),
+                selection: $selection,
                 account: $request->filled('social_account_id')
                     ? $workspace->socialAccounts()->find($request->input('social_account_id'))
                     : null,

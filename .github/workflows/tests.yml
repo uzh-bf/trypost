@@ -2,9 +2,9 @@ name: Tests
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, develop, release/2.0.0-uzh]
   pull_request:
-    branches: [main, develop]
+    branches: [main, develop, release/2.0.0-uzh]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -84,6 +84,14 @@ jobs:
         with:
           db-port: ${{ job.services.database.ports[matrix.port] }}
           redis-port: ${{ job.services.redis.ports['6379'] }}
+
+      - name: Ensure system timezone aliases
+        run: |
+          php -r 'printf("PHP=%s ICU=%s TZDB=%s\n", PHP_VERSION, INTL_ICU_VERSION, timezone_version_get()); foreach (["Asia/Calcutta", "Europe/Kiev", "Asia/Saigon"] as $id) { var_export([$id, in_array($id, DateTimeZone::listIdentifiers(DateTimeZone::ALL_WITH_BC), true), IntlTimeZone::getIanaID($id)]); echo PHP_EOL; }'
+          if ! php -r '$zones = DateTimeZone::listIdentifiers(DateTimeZone::ALL_WITH_BC); foreach (["Asia/Calcutta", "Europe/Kiev", "Asia/Saigon"] as $id) { if (!in_array($id, $zones, true)) { exit(1); } }'; then
+            sudo apt-get update
+            sudo apt-get install --no-install-recommends --yes tzdata-legacy
+          fi
 
       - name: Run backend tests
         env:

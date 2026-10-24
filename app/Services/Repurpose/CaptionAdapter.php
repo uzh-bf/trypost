@@ -9,6 +9,7 @@ use App\Enums\SocialAccount\Platform;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Services\Social\ContentSanitizer;
+use App\Support\Ai\AiModelCatalog;
 use App\Support\Hashtags;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
@@ -25,7 +26,7 @@ class CaptionAdapter
      *
      * @param  int|null  $limit  The account's own cap; the platform's when null.
      */
-    public function adapt(Workspace $workspace, ?User $user, string $caption, Platform $platform, ?int $limit = null): string
+    public function adapt(Workspace $workspace, ?User $user, string $caption, Platform $platform, ?int $limit = null, ?array $selection = null): string
     {
         $limit ??= $platform->maxContentLength();
         $caption = $platform->maxHashtags() === null ? $caption : Hashtags::keepFirst($caption, $platform->maxHashtags());
@@ -34,7 +35,7 @@ class CaptionAdapter
             return $caption;
         }
 
-        return $this->shorten($workspace, $user, $caption, $platform, $limit)
+        return $this->shorten($workspace, $user, $caption, $platform, $limit, $selection)
             ?? $this->truncate($caption, $platform, $limit);
     }
 
@@ -48,27 +49,28 @@ class CaptionAdapter
         return mb_strlen($this->sent($caption, $platform)) <= $limit;
     }
 
-    private function shorten(Workspace $workspace, ?User $user, string $caption, Platform $platform, int $limit): ?string
+    private function shorten(Workspace $workspace, ?User $user, string $caption, Platform $platform, int $limit, ?array $selection): ?string
     {
         if ($user === null || Gate::forUser($user)->denies('useAi', $workspace->account)) {
             return null;
         }
 
-        $key = "{$limit}:".md5($caption);
+        return rescue(function () use ($caption, $platform, $limit, $selection): ?string {
+            $selection ??= app(AiModelCatalog::class)->resolve();
+            $key = "{$selection['id']}:{$limit}:".md5($caption);
+            $shortened = $this->shortened[$key] ??= $this->ask($caption, $platform, $limit, $selection);
 
-        $shortened = $this->shortened[$key] ??= rescue(
-            fn (): string => $this->ask($caption, $platform, $limit),
-        );
-
-        return filled($shortened) && $this->fits($shortened, $platform, $limit) ? $shortened : null;
+            return filled($shortened) && $this->fits($shortened, $platform, $limit) ? $shortened : null;
+        });
     }
 
-    private function ask(string $caption, Platform $platform, int $limit): string
+    private function ask(string $caption, Platform $platform, int $limit, array $selection): string
     {
         $result = (new PostContentShortener(
             platformLabel: $platform->label(),
             limit: $limit,
-        ))->prompt($caption);
+        ))->withModelSelection($selection, fitting: true)
+            ->prompt($caption, provider: $selection['provider'], model: $selection['model']);
 
         return trim((string) $result->text);
     }

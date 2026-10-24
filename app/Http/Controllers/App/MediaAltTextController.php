@@ -7,6 +7,7 @@ namespace App\Http\Controllers\App;
 use App\Actions\Ai\GenerateMediaAltText;
 use App\Actions\Media\ResolveWorkspaceMedia;
 use App\Http\Requests\App\Ai\GenerateMediaAltTextRequest;
+use App\Support\Ai\AiModelCatalog;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\JsonResponse;
@@ -31,8 +32,10 @@ class MediaAltTextController extends Controller
             return response()->json(['message' => $gate->message()], Response::HTTP_PAYMENT_REQUIRED);
         }
 
+        $selection = app(AiModelCatalog::class)->resolve($request->validated('model_id'), 'vision');
+
         try {
-            $altText = GenerateMediaAltText::execute($request->user(), $asset);
+            $altText = GenerateMediaAltText::execute($request->user(), $asset, $selection);
         } catch (AiException|RequestException|ConnectionException) {
             return response()->json(['message' => __('posts.composer.media_editor.alt_generate_error')], Response::HTTP_BAD_GATEWAY);
         }

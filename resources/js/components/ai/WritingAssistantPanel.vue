@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useHttp } from '@inertiajs/vue3';
+import { useHttp, usePage } from '@inertiajs/vue3';
 import {
     IconArrowLeft,
     IconLoader2,
@@ -9,6 +9,7 @@ import {
 import { trans } from 'laravel-vue-i18n';
 import { computed, onBeforeUnmount, ref } from 'vue';
 
+import AiModelSelect from '@/components/ai/AiModelSelect.vue';
 import CharacterCounter from '@/components/CharacterCounter.vue';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -20,6 +21,7 @@ import {
 } from '@/lib/promptWords';
 import { formatNumber } from '@/lib/utils';
 import { assist } from '@/routes/app/posts/ai';
+import type { AppPageProps } from '@/types';
 
 export type AssistantChannel = {
     accountId: string;
@@ -53,6 +55,8 @@ const emit = defineEmits<{
     replace: [text: string];
 }>();
 
+const page = usePage<AppPageProps>();
+
 const screen = ref<'actions' | 'prompt' | 'suggestion'>('actions');
 const prompt = ref('');
 const lastPrompt = ref('');
@@ -63,6 +67,7 @@ const error = ref('');
 const pendingMode = ref('generate');
 
 const http = useHttp({
+    model_id: (page.props.aiModels?.default ?? null) as string | null,
     mode: '',
     prompt: '',
     current_content: '',
@@ -98,6 +103,7 @@ const request = async (
     },
     action: 'insert' | 'replace',
 ): Promise<void> => {
+    if (busy.value) return;
     busy.value = true;
     error.value = '';
     pendingMode.value = payload.mode;
@@ -176,6 +182,11 @@ const accept = (): void => {
         class="flex min-h-full flex-col gap-4"
         data-testid="writing-assistant-panel"
     >
+        <AiModelSelect
+            v-model="http.model_id"
+            test-id="writing-assistant-model"
+            :disabled="busy"
+        />
         <template v-if="screen === 'actions'">
             <p class="text-sm">
                 {{ $t('posts.composer.assistant_question') }}
@@ -349,7 +360,9 @@ const accept = (): void => {
             {{ error }}
         </p>
 
-        <div class="mt-auto space-y-2 border-t pt-4 text-xs text-muted-foreground">
+        <div
+            class="mt-auto space-y-2 border-t pt-4 text-xs text-muted-foreground"
+        >
             <p
                 v-if="channel && channel.limit !== null"
                 data-testid="writing-assistant-channel"

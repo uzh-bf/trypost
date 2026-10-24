@@ -53,7 +53,7 @@ test('workspace dashboard separates accounts and switches follower and post char
             'network' => Platform::Instagram->network(),
             'platform_user_id' => $account->platform_user_id,
             'account_username' => $username,
-            'date' => '2026-09-23',
+            'date' => now('UTC')->toDateString(),
             'followers_count' => $followers,
         ]);
         $publication = AnalyticsPublication::factory()->create([
@@ -63,7 +63,7 @@ test('workspace dashboard separates accounts and switches follower and post char
             'platform' => Platform::Instagram,
             'network' => Platform::Instagram->network(),
             'account_username' => $username,
-            'provider_published_at' => '2026-09-12 10:00:00',
+            'provider_published_at' => now('UTC')->subDay()->toDateTimeString(),
         ]);
         AnalyticsPublicationDailySnapshot::factory()->create([
             'publication_id' => $publication->id,
@@ -494,7 +494,7 @@ test('charts keep their width while the sidebar animates and resize once it sett
         'network' => Platform::Instagram->network(),
         'platform_user_id' => $account->platform_user_id,
         'account_username' => 'first',
-        'date' => '2026-09-23',
+        'date' => now('UTC')->toDateString(),
         'followers_count' => 120,
     ]);
 

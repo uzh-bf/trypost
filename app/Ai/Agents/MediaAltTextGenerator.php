@@ -4,15 +4,18 @@ declare(strict_types=1);
 
 namespace App\Ai\Agents;
 
+use App\Ai\Agents\Concerns\UsesAiModelSelection;
 use App\Enums\User\Locale;
-use Laravel\Ai\Attributes\Temperature;
 use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Promptable;
 
-#[Temperature(0.2)]
-class MediaAltTextGenerator implements Agent
+class MediaAltTextGenerator implements Agent, HasProviderOptions
 {
     use Promptable;
+    use UsesAiModelSelection;
+
+    private const float TEMPERATURE = 0.2;
 
     public const int MAX_LENGTH = 250;
 

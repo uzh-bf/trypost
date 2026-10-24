@@ -19,6 +19,7 @@ class GenerateMediaAltTextRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'model_id' => ['nullable', 'string', 'max:64'],
             'media_id' => ['required', 'uuid'],
         ];
     }

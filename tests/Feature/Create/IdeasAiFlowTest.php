@@ -15,10 +15,14 @@ use App\Models\User;
 use App\Models\Workspace;
 use Illuminate\Auth\Access\Response as AuthResponse;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Symfony\Component\HttpFoundation\Response;
 
 beforeEach(function () {
+    config(['ai_models.default' => null, 'ai.default' => 'openai', 'ai.providers.openai.key' => 'test-key']);
+    Storage::fake();
+    Media::created(fn (Media $media) => Storage::put($media->path, base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aWQAAAABJRU5ErkJggg==')));
     config(['trypost.self_hosted' => false]);
 
     $owner = User::factory()->create();

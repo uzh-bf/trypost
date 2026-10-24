@@ -178,6 +178,16 @@ return [
             ],
         ],
 
+        'litellm' => [
+            'driver' => 'openai',
+            'key' => env('LITELLM_API_KEY'),
+            'url' => env('LITELLM_URL'),
+            'store' => false,
+            'models' => [
+                'text' => ['default' => env('AI_SOL_MODEL')],
+            ],
+        ],
+
         'openai-compatible' => [
             'driver' => 'openai-compatible',
             'url' => env('OPENAI_COMPATIBLE_URL'),

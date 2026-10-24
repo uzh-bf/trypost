@@ -4,12 +4,17 @@ declare(strict_types=1);
 
 use App\Ai\Agents\MediaAltTextGenerator;
 use App\Enums\PostPlatform\ContentType;
+use App\Jobs\Analytics\BootstrapAccountAnalytics;
+use App\Jobs\Analytics\CollectAccountDailySnapshot;
 use App\Models\Media;
 use App\Models\Post;
 use App\Models\SocialAccount;
 use App\Models\User;
 use App\Models\Workspace;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
+use Laravel\Ai\Prompts\AgentPrompt;
 
 /**
  * A draft whose images are the 200x200 quadrant fixture, inlined as data URLs so
@@ -239,8 +244,9 @@ test('people tagged on an Instagram image are saved with their position', functi
 
 test('alt text can be generated with AI for a post image', function () {
     MediaAltTextGenerator::fake(['Four coloured squares in a grid.']);
-    [$post] = seedMediaEditorPost(firstMediaId: '00000000-0000-4000-8000-000000000001');
-    Media::factory()->ownedByPost($post)->create(['id' => '00000000-0000-4000-8000-000000000001']);
+    [$post] = seedMediaEditorPost(ContentType::BlueskyPost, firstMediaId: '00000000-0000-4000-8000-000000000001');
+    $asset = Media::factory()->ownedByPost($post)->create(['id' => '00000000-0000-4000-8000-000000000001', 'path' => 'uploads/alt-text.png', 'mime_type' => 'image/png']);
+    Storage::put($asset->path, file_get_contents(base_path('tests/fixtures/crop-quadrants.png')));
     $page = visit(route('app.posts.edit', $post));
     openMediaEditor($page, $post->social_account_id);
 
@@ -912,3 +918,41 @@ test('a crop with a filter on an image stored on another host is applied and sav
     expect($width / $height)->toEqualWithDelta(1.91, 0.02);
     $page->assertNoJavaScriptErrors();
 });
+
+test('AI model choice generates alt text and admission failures preserve it', function (int $width, int $height, string $suffix) {
+    Http::preventStrayRequests();
+    Queue::fake([BootstrapAccountAnalytics::class, CollectAccountDailySnapshot::class]);
+    config([
+        'ai_models.default' => 'sol',
+        'ai_models.profiles.sol.model' => 'test-sol', 'ai_models.profiles.opus.model' => 'test-opus', 'ai_models.profiles.gemini.model' => 'test-gemini',
+        'ai.providers.litellm.url' => 'https://gateway.example.test/v1', 'ai.providers.litellm.key' => 'test-key', 'ai.providers.openrouter.key' => 'test-key',
+    ]);
+    [$post] = seedMediaEditorPost(ContentType::BlueskyPost, firstMediaId: '00000000-0000-4000-8000-000000000002');
+    $post->user->update(['name' => 'Demo Reviewer', 'email' => 'reviewer@example.test']);
+    $post->workspace->update(['name' => 'Demo Workspace']);
+    $post->socialAccount->update(['display_name' => 'Demo Channel', 'username' => 'demo.example.test']);
+    $asset = Media::factory()->ownedByPost($post)->create(['id' => '00000000-0000-4000-8000-000000000002', 'path' => 'uploads/image-1.png', 'mime_type' => 'image/png']);
+    Storage::put($asset->path, file_get_contents(base_path('tests/fixtures/crop-quadrants.png')));
+    MediaAltTextGenerator::fake(['Four coloured squares in a grid.']);
+    $page = visit(route('app.posts.edit', $post))->resize($width, $height);
+    openMediaEditor($page, $post->social_account_id);
+    $page->click('@media-editor-alt-tab')->fill('@media-editor-alt-text', 'Existing description.')
+        ->click('@media-editor-alt-model')->click('@media-editor-alt-model-opus')
+        ->screenshot(false, "ai-models-alt-selected-{$suffix}")
+        ->click('@media-editor-alt-generate');
+    waitForMediaEditor($page, "document.querySelector('[data-testid=\"media-editor-alt-text\"]')?.value !== 'Existing description.'");
+    $page->assertValue('@media-editor-alt-text', 'Four coloured squares in a grid.')->screenshot(false, "ai-models-alt-result-{$suffix}");
+    MediaAltTextGenerator::assertPrompted(fn (AgentPrompt $prompt): bool => $prompt->model === 'test-opus');
+    Storage::delete($asset->path);
+    $page->click('@media-editor-alt-generate');
+    waitForMediaEditor($page, "document.querySelector('[data-testid=\"media-editor-alt-error\"]')?.textContent.length > 0");
+    $page->script(<<<'JS'
+        (async () => {
+            document.querySelector('[data-testid=media-editor-alt-error]').scrollIntoView({ block: 'center', behavior: 'instant' });
+            await new Promise(requestAnimationFrame);
+        })()
+    JS);
+    $page->assertValue('@media-editor-alt-text', 'Four coloured squares in a grid.')
+        ->screenshot(false, "ai-models-alt-error-{$suffix}")->assertNoJavaScriptErrors();
+    Http::assertNotSent(fn ($request): bool => str_contains($request->url(), 'gateway.example.test') || str_contains($request->url(), 'openrouter.ai'));
+})->with(['desktop' => [1280, 900, 'desktop'], 'compact' => [390, 844, 'compact']]);
