@@ -65,7 +65,8 @@ final class AiModelCatalog
             }
 
             try {
-                $model = Ai::textProvider($provider)->defaultTextModel();
+                $nativeProvider = Ai::textProvider($provider);
+                $model = $nativeProvider->defaultTextModel();
             } catch (Throwable) {
                 return null;
             }
@@ -85,22 +86,22 @@ final class AiModelCatalog
 
         $provider = data_get($profile, 'provider');
         $model = data_get($profile, 'model');
-        $connection = is_string($provider) ? config('ai.providers.'.$provider) : null;
+        $connection = $legacy
+            ? ['driver' => $nativeProvider->driver()]
+            : (is_string($provider) ? config('ai.providers.'.$provider) : null);
 
         if (! is_array($connection) || ! is_string($model) || blank($model)) {
             return null;
         }
 
         $driver = data_get($connection, 'driver');
-        $keyless = in_array($driver, ['ollama', 'openai-compatible'], true);
-        $legacyBedrockCredentials = $legacy && $driver === 'bedrock' && (
-            ($connection['use_default_credential_provider'] ?? true)
-            || (filled(data_get($connection, 'access_key_id')) && filled(data_get($connection, 'secret_access_key')))
-        );
+        if (! $legacy) {
+            $keyless = in_array($driver, ['ollama', 'openai-compatible'], true);
 
-        if ((! $keyless && ! $legacyBedrockCredentials && blank(data_get($connection, 'key')))
-            || (($provider === 'litellm' || $keyless) && blank(data_get($connection, 'url')))) {
-            return null;
+            if ((! $keyless && blank(data_get($connection, 'key')))
+                || (($provider === 'litellm' || $keyless) && blank(data_get($connection, 'url')))) {
+                return null;
+            }
         }
 
         // Only policy options may supplement the SDK-owned request fields.

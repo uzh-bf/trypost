@@ -313,34 +313,23 @@ test('selected policy options match the sdk driver rather than the configured pr
         ->and($agent->providerOptions('openrouter'))->toBe([]);
 });
 
-test('legacy bedrock accepts native credential modes without a bearer key or url', function (bool $defaultCredentials, ?string $accessKey, ?string $secretKey, bool $available) {
+test('legacy provider and credential handling remain with the native sdk', function (string $provider) {
     config([
         'ai_models.default' => null,
-        'ai.default' => 'bedrock',
-        'ai.providers.bedrock.key' => null,
-        'ai.providers.bedrock.url' => null,
-        'ai.providers.bedrock.use_default_credential_provider' => $defaultCredentials,
-        'ai.providers.bedrock.access_key_id' => $accessKey,
-        'ai.providers.bedrock.secret_access_key' => $secretKey,
+        'ai.default' => $provider,
+        "ai.providers.{$provider}.key" => null,
+        "ai.providers.{$provider}.url" => null,
+        "ai.providers.{$provider}.models.text.default" => 'test-legacy-model',
+        'ai.providers.bedrock.use_default_credential_provider' => true,
+        'ai.providers.bedrock.access_key_id' => null,
+        'ai.providers.bedrock.secret_access_key' => null,
         'ai.providers.bedrock.session_token' => null,
-        'ai.providers.bedrock.models.text.default' => 'test-bedrock-model',
     ]);
     PostWritingAssistant::fake(['Legacy suggestion.']);
-    $response = $this->actingAs($this->user)->postJson(route('app.posts.ai.assist'), [
+    $this->actingAs($this->user)->postJson(route('app.posts.ai.assist'), [
         'mode' => 'rephrase', 'current_content' => 'Original',
-    ]);
+    ])->assertOk()->assertJsonPath('content', 'Legacy suggestion.');
 
-    if ($available) {
-        $response->assertOk()->assertJsonPath('content', 'Legacy suggestion.');
-        PostWritingAssistant::assertPrompted(fn (AgentPrompt $prompt): bool => $prompt->provider->name() === 'bedrock' && $prompt->model === 'test-bedrock-model');
-    } else {
-        $response->assertUnprocessable()->assertJsonValidationErrors('model_id');
-        PostWritingAssistant::assertNeverPrompted();
-    }
-
+    PostWritingAssistant::assertPrompted(fn (AgentPrompt $prompt): bool => $prompt->provider->name() === $provider && $prompt->model === 'test-legacy-model');
     Http::assertNothingSent();
-})->with([
-    'default credential chain' => [true, null, null, true],
-    'static credentials' => [false, 'test-access', 'test-secret', true],
-    'incomplete static credentials' => [false, 'test-access', null, false],
-]);
+})->with(['bedrock', 'openai']);
