@@ -105,6 +105,11 @@ return [
         'assistant_suggestion' => 'Vorgeschlagener Text',
         'assistant_back' => 'Zurück',
         'assistant_error' => 'Der Vorschlag konnte nicht erstellt werden. Bitte versuche es erneut.',
+        'ai_model' => 'KI-Modell',
+        'ai_model_unavailable_option' => 'Modell nicht verfügbar',
+        'ai_model_destination_azure' => 'UZH Azure',
+        'ai_model_destination_openrouter' => 'OpenRouter',
+        'ai_model_destination_configured' => 'Konfigurierter Anbieter',
         'ai_model_unavailable' => 'Dieses KI-Modell ist nicht verfügbar. Wähle ein anderes Modell.',
         'assistant_modes' => [
             'generate' => 'Generieren',

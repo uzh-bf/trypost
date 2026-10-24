@@ -103,6 +103,11 @@ return [
         'assistant_suggestion' => 'Voorgestelde tekst',
         'assistant_back' => 'Terug',
         'assistant_error' => 'Er kon geen voorstel worden gemaakt. Probeer het opnieuw.',
+        'ai_model' => 'AI-model',
+        'ai_model_unavailable_option' => 'Model niet beschikbaar',
+        'ai_model_destination_azure' => 'UZH Azure',
+        'ai_model_destination_openrouter' => 'OpenRouter',
+        'ai_model_destination_configured' => 'Ingestelde provider',
         'ai_model_unavailable' => 'Dit AI-model is niet beschikbaar. Kies een ander model.',
         'assistant_modes' => [
             'generate' => 'Genereren',

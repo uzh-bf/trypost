@@ -1,13 +1,15 @@
 <script setup lang="ts">
-import { useHttp } from '@inertiajs/vue3';
+import { useHttp, usePage } from '@inertiajs/vue3';
 import { IconSparkles } from '@tabler/icons-vue';
 import { trans } from 'laravel-vue-i18n';
 import { ref } from 'vue';
 
+import AiModelSelect from '@/components/ai/AiModelSelect.vue';
 import { Button } from '@/components/ui/button';
 import { extractErrorMessage } from '@/lib/httpError';
 import type { MediaEdit } from '@/lib/mediaEditor';
 import { altText as generateAltTextRoute } from '@/routes/app/posts/ai';
+import type { AppPageProps } from '@/types';
 
 const props = defineProps<{
     mediaId: string;
@@ -15,19 +17,29 @@ const props = defineProps<{
 
 const edit = defineModel<MediaEdit>('edit', { required: true });
 
-const http = useHttp({ media_id: '' });
+const page = usePage<AppPageProps>();
+const modelId = ref<string | null>(page.props.aiModels?.default ?? null);
+const http = useHttp({ media_id: '', model_id: null as string | null });
 const generating = ref(false);
 const error = ref<string | null>(null);
 
 const generate = async (): Promise<void> => {
+    if (generating.value) return;
     const target = edit.value;
     generating.value = true;
     error.value = null;
     http.media_id = props.mediaId;
+    http.model_id = modelId.value;
     try {
-        const result = (await http.post(generateAltTextRoute.url())) as {
-            alt_text: string;
-        };
+        const result = (await http.post(generateAltTextRoute.url())) as
+            | { alt_text: string }
+            | undefined;
+        if (!result) {
+            error.value =
+                Object.values(http.errors)[0] ??
+                trans('posts.composer.media_editor.alt_generate_error');
+            return;
+        }
         target.altText = result.alt_text;
     } catch (exception) {
         error.value =
@@ -59,6 +71,12 @@ const generate = async (): Promise<void> => {
             rows="5"
             class="w-full rounded-lg border border-border bg-background p-3 text-sm"
             :placeholder="$t('posts.composer.media_editor.alt_placeholder')"
+        />
+        <AiModelSelect
+            v-model="modelId"
+            capability="vision"
+            test-id="media-editor-alt-model"
+            :disabled="generating"
         />
         <Button
             type="button"

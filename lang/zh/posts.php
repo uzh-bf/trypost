@@ -103,6 +103,11 @@ return [
         'assistant_suggestion' => '建议文案',
         'assistant_back' => '返回',
         'assistant_error' => '无法生成建议，请重试。',
+        'ai_model' => 'AI 模型',
+        'ai_model_unavailable_option' => '模型不可用',
+        'ai_model_destination_azure' => 'UZH Azure',
+        'ai_model_destination_openrouter' => 'OpenRouter',
+        'ai_model_destination_configured' => '已配置的提供商',
         'ai_model_unavailable' => '此 AI 模型不可用。请选择其他模型。',
         'assistant_modes' => [
             'generate' => '生成',

@@ -105,6 +105,11 @@ return [
         'assistant_suggestion' => 'Önerilen metin',
         'assistant_back' => 'Geri',
         'assistant_error' => 'Öneri oluşturulamadı. Lütfen tekrar deneyin.',
+        'ai_model' => 'Yapay zekâ modeli',
+        'ai_model_unavailable_option' => 'Model kullanılamıyor',
+        'ai_model_destination_azure' => 'UZH Azure',
+        'ai_model_destination_openrouter' => 'OpenRouter',
+        'ai_model_destination_configured' => 'Yapılandırılmış sağlayıcı',
         'ai_model_unavailable' => 'Bu yapay zekâ modeli kullanılamıyor. Başka bir model seçin.',
         'assistant_modes' => [
             'generate' => 'Oluştur',

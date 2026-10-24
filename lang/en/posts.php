@@ -103,6 +103,11 @@ return [
         'assistant_suggestion' => 'Suggested caption',
         'assistant_back' => 'Back',
         'assistant_error' => 'Could not generate a suggestion. Please try again.',
+        'ai_model' => 'AI model',
+        'ai_model_unavailable_option' => 'Unavailable model',
+        'ai_model_destination_azure' => 'UZH Azure',
+        'ai_model_destination_openrouter' => 'OpenRouter',
+        'ai_model_destination_configured' => 'Configured provider',
         'ai_model_unavailable' => 'This AI model is unavailable. Choose another model.',
         'assistant_modes' => [
             'generate' => 'Generate',

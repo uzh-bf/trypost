@@ -11,7 +11,12 @@ import type {
 } from '@/preferences';
 import type { AuthPlan, Features, PlanOption } from '@/types/plan';
 
-export type { AuthPlan, BillingInterval, Features, PlanOption } from '@/types/plan';
+export type {
+    AuthPlan,
+    BillingInterval,
+    Features,
+    PlanOption,
+} from '@/types/plan';
 export type { WelcomeStep } from '@/types/welcome';
 
 export interface Workspace {
@@ -99,11 +104,25 @@ export interface MediaUploadLimits {
     heic: boolean;
 }
 
+export interface AiModelOption {
+    id: string;
+    label: string;
+    destination: 'azure' | 'openrouter' | 'configured';
+    capabilities: ('text' | 'structured' | 'vision')[];
+}
+
+export interface AiModelCatalog {
+    default: string;
+    options: AiModelOption[];
+}
+
 export interface SharedData {
     name: string;
     auth: Auth;
     flash: FlashData;
     selfHosted: boolean;
+    aiEnabled?: boolean;
+    aiModels?: AiModelCatalog;
     legal: LegalLinks;
     contentTypeMediaRules?: Record<string, ContentTypeMediaRule>;
     defaultCropPresets?: CropPresetValue[];

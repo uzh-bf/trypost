@@ -103,6 +103,11 @@ return [
         'assistant_suggestion' => '提案された文章',
         'assistant_back' => '戻る',
         'assistant_error' => '提案を生成できませんでした。もう一度お試しください。',
+        'ai_model' => 'AIモデル',
+        'ai_model_unavailable_option' => '利用できないモデル',
+        'ai_model_destination_azure' => 'UZH Azure',
+        'ai_model_destination_openrouter' => 'OpenRouter',
+        'ai_model_destination_configured' => '設定済みプロバイダー',
         'ai_model_unavailable' => 'このAIモデルは利用できません。別のモデルを選んでください。',
         'assistant_modes' => [
             'generate' => '生成',

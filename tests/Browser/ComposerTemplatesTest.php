@@ -2,12 +2,21 @@
 
 declare(strict_types=1);
 
+use App\Ai\Agents\PostWritingAssistant;
 use App\Enums\PostTemplate\Visibility;
 use App\Enums\SocialAccount\Platform;
+use App\Enums\User\Locale;
+use App\Jobs\Analytics\BootstrapAccountAnalytics;
+use App\Jobs\Analytics\CollectAccountDailySnapshot;
+use App\Models\Post;
 use App\Models\PostTemplate;
 use App\Models\SocialAccount;
 use App\Models\User;
 use App\Models\Workspace;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
+use Laravel\Ai\Exceptions\ProviderOverloadedException;
+use Laravel\Ai\Prompts\AgentPrompt;
 
 function waitForComposerTemplatesTestId(mixed $page, string $testId): void
 {
@@ -356,4 +365,111 @@ test('a failed template load shows an inline error and retry recovers', function
     waitForComposerTemplatesTestId($page, 'composer-template-quick_win');
 
     $page->assertMissing('@composer-templates-error')->assertNoJavaScriptErrors();
+});
+
+test('AI model choice follows caption actions and failures preserve the draft', function (int $width, int $height, string $suffix) {
+    Http::preventStrayRequests();
+    Queue::fake([BootstrapAccountAnalytics::class, CollectAccountDailySnapshot::class]);
+    config([
+        'ai_models.default' => 'sol',
+        'ai_models.profiles.sol.model' => 'test-sol',
+        'ai_models.profiles.opus.model' => 'test-opus',
+        'ai_models.profiles.gemini.model' => 'test-gemini',
+        'ai.providers.litellm.url' => 'https://gateway.example.test/v1',
+        'ai.providers.litellm.key' => 'test-key',
+        'ai.providers.openrouter.key' => 'test-key',
+    ]);
+    [$user, $workspace] = composerTemplatesSetup();
+    $user->update(['name' => 'Demo Reviewer', 'email' => 'reviewer@example.test']);
+    $workspace->update(['name' => 'Demo Workspace']);
+    $account = SocialAccount::factory()->create(['workspace_id' => $workspace->id, 'platform' => Platform::Bluesky, 'display_name' => 'Demo Channel', 'username' => 'demo.example.test']);
+    $calls = 0;
+    PostWritingAssistant::fake(function () use (&$calls): string {
+        return match ($calls++) {
+            0 => 'A generated suggestion.',
+            1 => 'A regenerated suggestion.',
+            2 => throw new ProviderOverloadedException('Synthetic provider failure'),
+            default => 'A replacement suggestion.',
+        };
+    });
+    $this->actingAs($user);
+    $page = visit(route('app.posts.create'))->resize($width, $height);
+    waitForComposerTemplatesDialog($page, 'post-composer-dialog');
+    $page->click('@composer-add-account')->click("@composer-account-option-{$account->id}")
+        ->click('@composer-add-account');
+    $page->fill("@composer-caption-{$account->id}", 'Original draft.')->click('@composer-ai-assistant');
+    waitForComposerTemplatesTestId($page, 'writing-assistant-model');
+    $page->assertAttribute('@writing-assistant-model', 'data-state', 'closed')
+        ->screenshot(false, "ai-models-caption-default-{$suffix}")
+        ->click('@writing-assistant-model')
+        ->assertVisible('@writing-assistant-model-opus')
+        ->screenshot(false, "ai-models-caption-options-{$suffix}")
+        ->click('@writing-assistant-model-opus')
+        ->click('@writing-assistant-mode-generate')
+        ->fill('@writing-assistant-prompt', 'Write a short synthetic announcement for our demo channel.');
+    $page->script(<<<'JS'
+        (() => {
+            const send = XMLHttpRequest.prototype.send;
+            XMLHttpRequest.prototype.send = function (body) {
+                XMLHttpRequest.prototype.send = send;
+                setTimeout(() => send.call(this, body), 1500);
+            };
+        })()
+    JS);
+    $page->click('@writing-assistant-generate')->assertDisabled('@writing-assistant-model')
+        ->assertDisabled('@writing-assistant-generate')
+        ->screenshot(false, "ai-models-caption-busy-{$suffix}");
+    waitForComposerTemplatesTestId($page, 'writing-assistant-insert');
+    $page->screenshot(false, "ai-models-caption-result-{$suffix}")
+        ->click('@writing-assistant-regenerate');
+    waitForComposerTemplatesCondition($page, "!document.querySelector('[data-testid=\"writing-assistant-regenerate\"]')?.disabled");
+    $page->click('@writing-assistant-insert');
+    $page->assertValue("@composer-caption-{$account->id}", "Original draft.\n\nA regenerated suggestion.");
+    $page->click('@composer-ai-assistant');
+    waitForComposerTemplatesTestId($page, 'writing-assistant-mode-rephrase');
+    $page->click('@writing-assistant-model')->click('@writing-assistant-model-opus')
+        ->click('@writing-assistant-mode-rephrase');
+    waitForComposerTemplatesTestId($page, 'writing-assistant-error');
+    $page->assertValue("@composer-caption-{$account->id}", "Original draft.\n\nA regenerated suggestion.")
+        ->screenshot(false, "ai-models-caption-error-{$suffix}");
+    $page->click('@writing-assistant-mode-rephrase');
+    waitForComposerTemplatesTestId($page, 'writing-assistant-replace');
+    $page->click('@writing-assistant-replace');
+    if ($width < 1024) {
+        $page->click('@composer-assistant-sheet-close');
+    }
+    $page->assertValue("@composer-caption-{$account->id}", 'A replacement suggestion.');
+    expect($calls)->toBe(4);
+    PostWritingAssistant::assertPrompted(fn (AgentPrompt $prompt): bool => $prompt->model === 'test-opus' && $prompt->agent->mode->value === 'generate');
+    PostWritingAssistant::assertPrompted(fn (AgentPrompt $prompt): bool => $prompt->model === 'test-opus' && $prompt->agent->mode->value === 'regenerate');
+    PostWritingAssistant::assertPrompted(fn (AgentPrompt $prompt): bool => $prompt->model === 'test-opus' && $prompt->agent->mode->value === 'rephrase');
+    $page->click('@composer-save-draft');
+    waitForComposerTemplatesDatabase($page, fn (): bool => Post::where('user_id', $user->id)->exists());
+    $post = Post::where('user_id', $user->id)->sole();
+    expect(strip_tags($post->content))->toBe('A replacement suggestion.');
+    $reopened = visit(route('app.posts.edit', $post))->resize($width, $height);
+    waitForComposerTemplatesTestId($reopened, "composer-caption-{$account->id}");
+    $reopened->assertValue("@composer-caption-{$account->id}", 'A replacement suggestion.')->screenshot(false, "ai-models-caption-saved-{$suffix}")->assertNoJavaScriptErrors();
+    Http::assertNotSent(fn ($request): bool => str_contains($request->url(), 'gateway.example.test') || str_contains($request->url(), 'openrouter.ai'));
+})->with(['desktop' => [1280, 900, 'desktop'], 'compact' => [390, 844, 'compact']]);
+
+test('an unavailable AI default stays visible and a legacy single model needs no selector', function () {
+    Http::preventStrayRequests();
+    Queue::fake([BootstrapAccountAnalytics::class, CollectAccountDailySnapshot::class]);
+    config(['ai_models.default' => 'sol', 'ai_models.profiles.sol.enabled' => false, 'ai_models.profiles.opus.model' => 'test-opus', 'ai.providers.openrouter.key' => 'test-key']);
+    [$user] = composerTemplatesSetup();
+    $user->update(['name' => 'Demo Reviewer', 'email' => 'reviewer@example.test', 'locale' => Locale::German]);
+    $this->actingAs($user);
+    $page = visit(route('app.posts.create'))->resize(1280, 900);
+    waitForComposerTemplatesDialog($page, 'post-composer-dialog');
+    $page->click('@composer-ai-assistant')->click('@writing-assistant-mode-generate')
+        ->fill('@writing-assistant-prompt', 'Write a short synthetic announcement for our demo channel.')
+        ->click('@writing-assistant-generate');
+    waitForComposerTemplatesTestId($page, 'writing-assistant-error');
+    $page->screenshot(false, 'ai-models-caption-unavailable-de')->assertNoJavaScriptErrors();
+    config(['ai_models.default' => null, 'ai.default' => 'openai']);
+    $legacy = visit(route('app.posts.create'));
+    waitForComposerTemplatesDialog($legacy, 'post-composer-dialog');
+    $legacy->click('@composer-ai-assistant')->assertMissing('@writing-assistant-model');
+    Http::assertNotSent(fn ($request): bool => str_contains($request->url(), 'gateway.example.test') || str_contains($request->url(), 'openrouter.ai'));
 });

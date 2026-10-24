@@ -103,6 +103,11 @@ return [
         'assistant_suggestion' => 'Προτεινόμενο κείμενο',
         'assistant_back' => 'Πίσω',
         'assistant_error' => 'Δεν ήταν δυνατή η δημιουργία πρότασης. Δοκιμάστε ξανά.',
+        'ai_model' => 'Μοντέλο AI',
+        'ai_model_unavailable_option' => 'Μη διαθέσιμο μοντέλο',
+        'ai_model_destination_azure' => 'UZH Azure',
+        'ai_model_destination_openrouter' => 'OpenRouter',
+        'ai_model_destination_configured' => 'Ρυθμισμένος πάροχος',
         'ai_model_unavailable' => 'Αυτό το μοντέλο AI δεν είναι διαθέσιμο. Επιλέξτε άλλο μοντέλο.',
         'assistant_modes' => [
             'generate' => 'Δημιουργία',

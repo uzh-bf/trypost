@@ -103,6 +103,11 @@ return [
         'assistant_suggestion' => '제안된 문구',
         'assistant_back' => '뒤로',
         'assistant_error' => '제안을 생성하지 못했습니다. 다시 시도해 주세요.',
+        'ai_model' => 'AI 모델',
+        'ai_model_unavailable_option' => '사용할 수 없는 모델',
+        'ai_model_destination_azure' => 'UZH Azure',
+        'ai_model_destination_openrouter' => 'OpenRouter',
+        'ai_model_destination_configured' => '설정된 공급자',
         'ai_model_unavailable' => '이 AI 모델은 사용할 수 없습니다. 다른 모델을 선택하세요.',
         'assistant_modes' => [
             'generate' => '생성',

@@ -103,6 +103,11 @@ return [
         'assistant_suggestion' => 'النص المقترح',
         'assistant_back' => 'رجوع',
         'assistant_error' => 'تعذر إنشاء اقتراح. حاول مرة أخرى.',
+        'ai_model' => 'نموذج الذكاء الاصطناعي',
+        'ai_model_unavailable_option' => 'النموذج غير متاح',
+        'ai_model_destination_azure' => 'UZH Azure',
+        'ai_model_destination_openrouter' => 'OpenRouter',
+        'ai_model_destination_configured' => 'المزوّد المُعدّ',
         'ai_model_unavailable' => 'نموذج الذكاء الاصطناعي هذا غير متاح. اختر نموذجًا آخر.',
         'assistant_modes' => [
             'generate' => 'إنشاء',

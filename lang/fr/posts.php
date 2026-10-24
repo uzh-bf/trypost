@@ -103,6 +103,11 @@ return [
         'assistant_suggestion' => 'Texte proposé',
         'assistant_back' => 'Retour',
         'assistant_error' => 'Impossible de générer une suggestion. Veuillez réessayer.',
+        'ai_model' => 'Modèle IA',
+        'ai_model_unavailable_option' => 'Modèle indisponible',
+        'ai_model_destination_azure' => 'UZH Azure',
+        'ai_model_destination_openrouter' => 'OpenRouter',
+        'ai_model_destination_configured' => 'Fournisseur configuré',
         'ai_model_unavailable' => 'Ce modèle IA est indisponible. Choisissez un autre modèle.',
         'assistant_modes' => [
             'generate' => 'Générer',

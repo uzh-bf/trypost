@@ -103,6 +103,11 @@ return [
         'assistant_suggestion' => 'Запропонований текст',
         'assistant_back' => 'Назад',
         'assistant_error' => 'Не вдалося створити пропозицію. Спробуйте ще раз.',
+        'ai_model' => 'Модель ШІ',
+        'ai_model_unavailable_option' => 'Модель недоступна',
+        'ai_model_destination_azure' => 'UZH Azure',
+        'ai_model_destination_openrouter' => 'OpenRouter',
+        'ai_model_destination_configured' => 'Налаштований провайдер',
         'ai_model_unavailable' => 'Ця модель ШІ недоступна. Виберіть іншу модель.',
         'assistant_modes' => [
             'generate' => 'Створити',

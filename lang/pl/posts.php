@@ -103,6 +103,11 @@ return [
         'assistant_suggestion' => 'Sugerowana treść',
         'assistant_back' => 'Wróć',
         'assistant_error' => 'Nie udało się wygenerować propozycji. Spróbuj ponownie.',
+        'ai_model' => 'Model AI',
+        'ai_model_unavailable_option' => 'Model niedostępny',
+        'ai_model_destination_azure' => 'UZH Azure',
+        'ai_model_destination_openrouter' => 'OpenRouter',
+        'ai_model_destination_configured' => 'Skonfigurowany dostawca',
         'ai_model_unavailable' => 'Ten model AI jest niedostępny. Wybierz inny model.',
         'assistant_modes' => [
             'generate' => 'Generuj',

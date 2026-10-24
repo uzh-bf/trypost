@@ -1,9 +1,15 @@
 <script setup lang="ts">
-import { useHttp } from '@inertiajs/vue3';
-import { IconLoader2, IconRefresh, IconSparkles, IconX } from '@tabler/icons-vue';
+import { useHttp, usePage } from '@inertiajs/vue3';
+import {
+    IconLoader2,
+    IconRefresh,
+    IconSparkles,
+    IconX,
+} from '@tabler/icons-vue';
 import { trans } from 'laravel-vue-i18n';
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 
+import AiModelSelect from '@/components/ai/AiModelSelect.vue';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -18,21 +24,30 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { extractErrorMessage } from '@/lib/httpError';
 import { generate } from '@/routes/app/create/ideas';
+import type { AppPageProps } from '@/types';
 import type { IdeaDraft } from '@/types/idea';
 
 const emit = defineEmits<{
     use: [idea: IdeaDraft];
 }>();
 
+const page = usePage<AppPageProps>();
+const modelId = ref<string | null>(page.props.aiModels?.default ?? null);
 const open = ref(false);
 const error = ref('');
 const idea = ref<IdeaDraft | null>(null);
 let requestId = 0;
 
 const http = useHttp<
-    { business: string; audience: string; notes: string },
+    {
+        business: string;
+        audience: string;
+        notes: string;
+        model_id: string | null;
+    },
     IdeaDraft
 >({
+    model_id: null,
     business: '',
     audience: '',
     notes: '',
@@ -47,6 +62,7 @@ watch(open, (isOpen) => {
     }
 
     error.value = '';
+    modelId.value = page.props.aiModels?.default ?? null;
     idea.value = null;
     http.business = '';
     http.audience = '';
@@ -77,6 +93,7 @@ const submit = async (): Promise<void> => {
     error.value = '';
     http.cancel();
     const currentRequest = ++requestId;
+    http.model_id = modelId.value;
 
     try {
         const result = await http.post(generate.url());
@@ -137,7 +154,7 @@ const useIdea = (): void => {
             data-testid="ideas-generate-dialog"
         >
             <DialogHeader
-                class="shrink-0 px-6 pt-6 pe-14 pb-4 text-left sm:p-0"
+                class="shrink-0 px-6 pe-14 pt-6 pb-4 text-left sm:p-0"
             >
                 <DialogTitle>{{
                     $t('create.ideas.generate.title')
@@ -147,13 +164,20 @@ const useIdea = (): void => {
                 }}</DialogDescription>
             </DialogHeader>
             <DialogClose
-                class="absolute top-4 end-4 z-20 flex size-8 items-center justify-center rounded-lg text-foreground transition-control hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring sm:hidden"
+                class="absolute end-4 top-4 z-20 flex size-8 items-center justify-center rounded-lg text-foreground transition-control hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring sm:hidden"
                 :aria-label="$t('common.close')"
                 data-testid="ideas-generate-close"
             >
                 <IconX class="size-4" />
             </DialogClose>
 
+            <AiModelSelect
+                v-model="modelId"
+                class="mx-6 my-3 sm:mx-0"
+                capability="structured"
+                test-id="ideas-generate-model"
+                :disabled="http.processing"
+            />
             <div
                 v-if="idea"
                 class="flex min-h-0 flex-1 flex-col sm:flex-none sm:gap-4"
