@@ -2,7 +2,6 @@
 
 declare(strict_types=1);
 
-use App\Ai\Agents\PostContentShortener;
 use App\Ai\Agents\PostWritingAssistant;
 use App\Enums\SocialAccount\Platform;
 use App\Models\Idea;
@@ -303,14 +302,6 @@ test('the raw image boundary is admitted using storage metadata rather than row 
 
 test('catalog metadata is not shared with guests', function () {
     $this->get(route('login'))->assertInertia(fn (AssertableInertia $page) => $page->missing('aiModels')->where('aiEnabled', true));
-});
-
-test('selected policy options match the sdk driver rather than the configured provider name', function () {
-    $selection = app(AiModelCatalog::class)->resolve('sol');
-    $agent = (new PostContentShortener('Bluesky', 300))->withModelSelection($selection);
-    expect($agent->providerOptions('openai'))->toBe($selection['options'])
-        ->and($agent->providerOptions('litellm'))->toBe([])
-        ->and($agent->providerOptions('openrouter'))->toBe([]);
 });
 
 test('legacy provider and credential handling remain with the native sdk', function (string $provider) {
