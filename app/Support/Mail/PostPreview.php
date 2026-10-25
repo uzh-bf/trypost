@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Support\Mail;
 
 use App\Models\Post;
+use App\Support\Media\MediaUrl;
 
 class PostPreview
 {
@@ -16,7 +17,7 @@ class PostPreview
         $media = $post->media_items->first();
         $image = null;
 
-        if ($media?->isImage() && filled($media->url)) {
+        if (! MediaUrl::isAzure() && $media?->isImage() && filled($media->url)) {
             $width = $media->width();
             $height = $media->height();
             $scale = $width > 0 && $height > 0 ? min(1, 440 / $width, 280 / $height) : null;

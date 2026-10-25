@@ -11,6 +11,7 @@ use AzureOss\Storage\Blob\BlobContainerClient;
 use AzureOss\Storage\Blob\Models\BlobHttpHeaders;
 use AzureOss\Storage\Blob\Models\CommitBlockListOptions;
 use AzureOss\Storage\Blob\Specialized\BlockBlobClient;
+use AzureOss\Storage\Common\ApiVersion;
 use AzureOss\Storage\Common\Middleware\ClientFactory;
 use Closure;
 use finfo;
@@ -163,13 +164,8 @@ class AzureBlockUploader
             return $this->status($state, completed: false);
         }
 
-        $mimeType = $this->detectMimeType(
-            (string) data_get($state, 'header'),
-            MediaType::extensionOf($fileName),
-        );
-
+        $mimeType = (string) data_get($state, 'mime_type');
         $this->commitBlocks($client, data_get($state, 'block_ids'), $mimeType);
-        $state['mime_type'] = $mimeType;
         $this->cache->put($cacheKey, $state, now()->addHours(self::CACHE_TTL_HOURS));
 
         return $this->status($state, completed: true);
@@ -180,7 +176,6 @@ class AzureBlockUploader
      *     path: string,
      *     blob_name: string,
      *     mime_type: string,
-     *     header: string,
      *     block_ids: array<int, string>,
      *     next_offset: int,
      *     bytes_received: int,
@@ -192,13 +187,11 @@ class AzureBlockUploader
         $extension = MediaType::extensionOf($fileName);
         $suffix = $extension === '' ? '' : ".{$extension}";
         $path = 'medias/'.Str::uuid().$suffix;
-        $header = substr($chunk, 0, self::MIME_SNIFF_BYTES);
 
         return [
             'path' => $path,
             'blob_name' => FlatBlobAdapter::encodePath($path),
-            'mime_type' => $this->detectMimeType($header, $extension),
-            'header' => $header,
+            'mime_type' => $this->detectMimeType(substr($chunk, 0, self::MIME_SNIFF_BYTES), $extension),
             'block_ids' => [],
             'next_offset' => 0,
             'bytes_received' => 0,
@@ -292,6 +285,9 @@ class AzureBlockUploader
             ],
             RequestOptions::HTTP_ERRORS => true,
             RequestOptions::STREAM => true,
+            RequestOptions::TIMEOUT => 120,
+            RequestOptions::CONNECT_TIMEOUT => 10,
+            RequestOptions::READ_TIMEOUT => 120,
         ]);
 
         $contentRange = $response->getHeaderLine('Content-Range');
@@ -330,6 +326,6 @@ class AzureBlockUploader
         }
 
         // The installed SDK has no ranged download option, so reuse its authenticated transport.
-        return (new ClientFactory)->create($client->uri, $client->credential);
+        return (new ClientFactory)->create($client->uri, $client->credential, apiVersion: ApiVersion::V2024_08_04);
     }
 }

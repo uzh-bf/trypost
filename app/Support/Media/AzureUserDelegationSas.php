@@ -212,10 +212,11 @@ final class AzureUserDelegationSas
             return null;
         }
 
+        $fetchedAt = data_get($payload, 'fetched_at');
         if (
             ! is_array($payload)
             || data_get($payload, 'schema') !== 1
-            || ! is_int(data_get($payload, 'fetched_at'))
+            || ! is_int($fetchedAt)
         ) {
             $cache->forget($cacheKey);
 
@@ -223,10 +224,8 @@ final class AzureUserDelegationSas
         }
 
         $delegationKey = $this->normaliseDelegationKey(data_get($payload, 'key'));
-        $fetchedAt = data_get($payload, 'fetched_at');
         if (
             $delegationKey === null
-            || ! is_int($fetchedAt)
             || $now->getTimestamp() >= $fetchedAt + self::CACHE_TTL_SECONDS
             || ! $this->keyCovers($delegationKey, $sasStart, $sasExpiry, $now)
         ) {

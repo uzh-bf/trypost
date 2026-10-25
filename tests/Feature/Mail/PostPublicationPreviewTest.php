@@ -10,6 +10,8 @@ use App\Mail\PostPublishFailed;
 use App\Models\Post;
 use App\Models\SocialAccount;
 use App\Support\Mail\PostPreview;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Symfony\Component\DomCrawler\Crawler;
 
 test('the email channel component resolves the platform name and its network logo', function (Platform $platform) {
@@ -152,3 +154,27 @@ test('the image preview renders without a caption and escapes its alternative te
         ->and($image->attr('alt'))->toBe('Studio " onclick="alert(1)')
         ->and($image->attr('onclick'))->toBeNull();
 });
+
+test('azure publication emails use the attachment fallback without granting file access', function (Status $status) {
+    config(['filesystems.default' => 'azure', 'filesystems.disks.azure.driver' => 'azure-flat']);
+    Storage::fake('azure')->buildTemporaryUrlsUsing(fn () => throw new LogicException('Email must not grant file access.'));
+    $post = Post::factory()->instagram()->create([
+        'content' => null,
+        'publish_status' => $status,
+        'media' => [[
+            'id' => (string) Str::uuid(),
+            'path' => 'medias/photo.jpg',
+            'url' => 'https://example.test/photo.jpg',
+            'type' => 'image',
+            'original_filename' => 'Preview photo.jpg',
+        ]],
+    ]);
+
+    $preview = PostPreview::from($post);
+    $mail = $status === Status::Published ? new PostPublished($post) : new PostPublishFailed($post);
+    $document = new Crawler($mail->render());
+
+    expect($preview['image'])->toBeNull()
+        ->and($document->filter('body')->text())->toContain($preview['attachment'])
+        ->and($document->filter('img[src="'.$post->media[0]['url'].'"]')->count())->toBe(0);
+})->with([Status::Published, Status::Failed]);

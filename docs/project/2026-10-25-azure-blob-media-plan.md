@@ -17,3 +17,5 @@ The source package ends with reviewed, CI-checked draft delivery. Entra/RBAC/SAS
 The optional backend changes delivery policy, not media ownership or database identity. Logical paths remain stable over the flat physical layout. No new product primitive is introduced.
 
 Unavailable media in API/MCP/webhook payloads retains its stable identity with a null delivery URL, so one absent attachment does not break a collection or lifecycle event. Browser file fetches still return not-found; confirmed-missing scheduled attachments fail before a provider call. Avatar storage failures yield no avatar, and redacted exception diagnostics retain file, line, safe stack frames and the previous chain. Real-Azure qualification includes API/MCP and avatar fan-out as well as individual redirects.
+
+Publication emails use their existing text and attachment fallback under Azure instead of sending session-only image URLs or bearer links. API/MCP thread previews use the same authorized expiring-link helper as post resources. Ranged reads use explicit connection, request and streamed-read timeouts.

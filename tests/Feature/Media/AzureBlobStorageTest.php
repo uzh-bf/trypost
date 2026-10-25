@@ -8,6 +8,7 @@ use App\Jobs\DispatchWebhook;
 use App\Mcp\Servers\TryPostServer;
 use App\Mcp\Tools\Post\GetPostTool;
 use App\Mcp\Tools\Post\ListPostsTool;
+use App\Mcp\Tools\Post\PreviewPostTool;
 use App\Models\Media;
 use App\Models\Post;
 use App\Models\SocialAccount;
@@ -146,6 +147,30 @@ test('MCP post output uses the same authorized expiring media contract', functio
         ->where('media.0.url', 'https://example.blob.core.windows.net/media/medias%2Ftest.jpg?sp=r&sig=synthetic')->etc());
     expect($this->signing->requests)->toHaveCount(1);
 });
+
+test('API and MCP thread previews grant only available workspace media', function (string $state) {
+    $media = $state === 'foreign'
+        ? Media::factory()->temporaryUpload(Workspace::factory()->create())->create(['path' => 'medias/foreign.jpg'])
+        : $this->media;
+    Storage::put($media->path, 'synthetic-image');
+    if ($state === 'missing') {
+        Storage::delete($media->path);
+    }
+    $post = Post::factory()->bluesky()->create(['workspace_id' => $this->workspace->id, 'user_id' => $this->user->id]);
+    $post->update(['meta' => ['thread_replies' => [['text' => 'Reply', 'media' => [MediaItem::fromMedia($media)->toArray()]]]]]);
+    $url = $state === 'available'
+        ? 'https://example.blob.core.windows.net/media/medias%2Ftest.jpg?sp=r&sig=synthetic'
+        : null;
+
+    $this->withToken(passportToken($this->user, $this->workspace))
+        ->getJson(route('api.posts.preview', $post))
+        ->assertOk()->assertJsonPath('thread_replies.0.media.0.url', $url);
+    TryPostServer::actingAs($this->user)
+        ->tool(PreviewPostTool::class, ['post_id' => $post->id])
+        ->assertOk()->assertStructuredContent(fn (AssertableJson $json) => $json
+        ->where('thread_replies.0.media.0.url', $url)->etc());
+    expect($this->signing->requests)->toHaveCount($state === 'available' ? 2 : 0);
+})->with(['available', 'missing', 'foreign']);
 
 test('the publishing consumer resolves media access when it executes', function () {
     $item = MediaItem::fromMedia($this->media);

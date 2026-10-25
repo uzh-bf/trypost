@@ -285,7 +285,6 @@ test('azure block uploader retries a failed first block against the same blob an
             parent::__construct(
                 Cache::store(),
                 new BlobContainerClient(new Uri('https://account.blob.core.windows.net/test-container')),
-                fn (string $path): string => 'flat/'.hash('sha256', $path),
             );
         }
 
@@ -359,6 +358,9 @@ test('azure block uploader reads an encoded blob with the requested range', func
     expect($uploader->readRange('medias/clip.mp4', 40, 16))->toBe('sixteen bytes!!!');
     expect($history)->toHaveCount(1);
     expect($history[0]['request']->getHeaderLine('Range'))->toBe('bytes=40-55');
+    expect($history[0]['options']['timeout'])->toBe(120)
+        ->and($history[0]['options']['connect_timeout'])->toBe(10)
+        ->and($history[0]['options']['read_timeout'])->toBe(120);
     expect($history[0]['request']->getUri()->getPath())->toBe(
         '/test-container/medias~clip.mp4'
     );

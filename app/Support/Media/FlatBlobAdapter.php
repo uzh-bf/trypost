@@ -58,10 +58,8 @@ final class FlatBlobAdapter implements FilesystemAdapter
 
         $prefix = self::encodePath($directory).self::SEPARATOR;
 
-        foreach ($this->adapter->listContents('', true) as $item) {
-            if ($item instanceof FileAttributes && str_starts_with($item->path(), $prefix)) {
-                return true;
-            }
+        foreach ($this->filesWithPrefix($prefix) as $item) {
+            return true;
         }
 
         return false;
@@ -103,10 +101,8 @@ final class FlatBlobAdapter implements FilesystemAdapter
         $prefix = self::encodePath($directory).self::SEPARATOR;
         $physicalPaths = [];
 
-        foreach ($this->adapter->listContents('', true) as $item) {
-            if ($item instanceof FileAttributes && str_starts_with($item->path(), $prefix)) {
-                $physicalPaths[] = $item->path();
-            }
+        foreach ($this->filesWithPrefix($prefix) as $item) {
+            $physicalPaths[] = $item->path();
         }
 
         foreach ($physicalPaths as $physicalPath) {
@@ -151,11 +147,7 @@ final class FlatBlobAdapter implements FilesystemAdapter
         $prefix = $directory === '' ? '' : self::encodePath($directory).self::SEPARATOR;
         $directories = [];
 
-        foreach ($this->adapter->listContents('', true) as $item) {
-            if (! $item instanceof FileAttributes || ! str_starts_with($item->path(), $prefix)) {
-                continue;
-            }
-
+        foreach ($this->filesWithPrefix($prefix) as $item) {
             $relativePath = substr($item->path(), strlen($prefix));
             $relativeSegments = explode(self::SEPARATOR, $relativePath);
             $fileSegment = array_pop($relativeSegments);
@@ -266,6 +258,16 @@ final class FlatBlobAdapter implements FilesystemAdapter
 
         if (preg_match('/\p{C}/u', $segment) === 1) {
             throw self::invalidPath($path, 'control characters are not allowed');
+        }
+    }
+
+    /** @return iterable<FileAttributes> */
+    private function filesWithPrefix(string $prefix): iterable
+    {
+        foreach ($this->adapter->listContents('', true) as $item) {
+            if ($item instanceof FileAttributes && str_starts_with($item->path(), $prefix)) {
+                yield $item;
+            }
         }
     }
 
