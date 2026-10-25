@@ -108,7 +108,7 @@ test('every preview fetch renews the access window after time passes', function 
 test('sas data is removed from nested logs and exceptions', function () {
     $url = 'https://example.blob.core.windows.net/media/a?sv=2023-11-03&sig=synthetic';
     $record = RedactStorageCredentials::clean(['nested' => ['uri' => $url], 'exception' => new RuntimeException($url)]);
-    expect(json_encode($record))->not->toContain('sig=', 'synthetic')
+    expect(json_encode($record))->not->toContain('sig=')->not->toContain('synthetic')
         ->and($record['nested']['uri'])->toBe('https://example.blob.core.windows.net/media/a?[redacted]');
 });
 
@@ -215,7 +215,13 @@ test('avatar storage failures leave the page accessor usable', function () {
 
 test('log redaction retains exception diagnostics without arguments or signed links', function () {
     $url = 'https://example.blob.core.windows.net/media/a?sig=synthetic';
-    $error = new RuntimeException($url, 0, new LogicException($url));
+    $previousSetting = ini_set('zend.exception_ignore_args', '0');
+    try {
+        $error = (fn (string $argument) => new RuntimeException($url, 0, new LogicException($url)))('trace-argument-synthetic');
+    } finally {
+        ini_set('zend.exception_ignore_args', $previousSetting);
+    }
+    expect($error->getTrace()[0])->toHaveKey('args');
     $handler = new TestHandler;
     $logger = new Logger('test', [$handler]);
     (new RedactStorageCredentials)(new Illuminate\Log\Logger($logger));
@@ -225,5 +231,8 @@ test('log redaction retains exception diagnostics without arguments or signed li
         ->and($record['line'])->toBe($error->getLine())
         ->and($record['trace'])->not->toBeEmpty()
         ->and($record['previous']['type'])->toBe(LogicException::class)
-        ->and(json_encode($record))->not->toContain('sig=', 'synthetic', '"args"');
+        ->and(json_encode($record))->not->toContain('sig=')->not->toContain('synthetic');
+    foreach ($record['trace'] as $frame) {
+        expect($frame)->not->toHaveKey('args');
+    }
 });
