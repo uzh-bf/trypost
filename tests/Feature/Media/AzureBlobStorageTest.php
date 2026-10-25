@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 use App\Dto\MediaItem;
 use App\Http\Resources\Api\PostResource;
+use App\Mcp\Servers\TryPostServer;
+use App\Mcp\Tools\Post\GetPostTool;
 use App\Models\Media;
 use App\Models\Post;
 use App\Models\User;
@@ -11,6 +13,7 @@ use App\Models\Workspace;
 use App\Support\Media\MediaUrl;
 use App\Support\Media\RedactStorageCredentials;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Testing\Fluent\AssertableJson;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 beforeEach(function () {
@@ -105,7 +108,6 @@ test('sas data is removed from nested logs and exceptions', function () {
         ->and($record['nested']['uri'])->toBe('https://example.blob.core.windows.net/media/a?[redacted]');
 });
 
-
 test('token API responses mint file links without a browser session and enforce media workspace', function () {
     $post = Post::factory()->create(['workspace_id' => $this->workspace->id, 'user_id' => $this->user->id]);
     $post->update(['media' => [MediaItem::fromMedia($this->media)->toArray()]]);
@@ -129,4 +131,23 @@ test('config-only recovery checks missing files in API and browser without minti
     auth()->logout();
     $this->withToken(passportToken($this->user, $this->workspace))->getJson(route('api.posts.show', $post))->assertNotFound();
     expect($this->signing->requests)->toBeEmpty();
+});
+
+test('MCP post output uses the same authorized expiring media contract', function () {
+    $post = Post::factory()->create(['workspace_id' => $this->workspace->id, 'user_id' => $this->user->id]);
+    $post->update(['media' => [MediaItem::fromMedia($this->media)->toArray()]]);
+    TryPostServer::actingAs($this->user)
+        ->tool(GetPostTool::class, ['post_id' => $post->id])
+        ->assertOk()->assertStructuredContent(fn (AssertableJson $json) => $json
+        ->where('media.0.url', 'https://example.blob.core.windows.net/media/medias%2Ftest.jpg?sp=r&sig=synthetic')->etc());
+    expect($this->signing->requests)->toHaveCount(1);
+});
+
+test('the publishing consumer resolves media access when it executes', function () {
+    $item = MediaItem::fromMedia($this->media);
+    expect($this->signing->requests)->toBeEmpty();
+    $this->travel(2)->days();
+    expect($item->publishUrl())->toContain('sig=synthetic');
+    expect($this->signing->requests)->toHaveCount(1)
+        ->and($this->signing->requests[0][1]->getTimestamp())->toBe(now()->addHours(26)->getTimestamp());
 });
