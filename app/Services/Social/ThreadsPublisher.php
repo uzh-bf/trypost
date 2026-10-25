@@ -142,7 +142,7 @@ class ThreadsPublisher
         // Step 1: Create container
         $params = [
             'media_type' => 'IMAGE',
-            'image_url' => $media->url,
+            'image_url' => $media->publishUrl(),
             'text' => $content,
             ...$this->containerOptions,
             'access_token' => $accessToken,
@@ -185,7 +185,7 @@ class ThreadsPublisher
         // Step 1: Create container
         $containerResponse = $this->socialHttp()->post("{$this->baseUrl}/{$userId}/threads", [
             'media_type' => 'VIDEO',
-            'video_url' => $media->url,
+            'video_url' => $media->publishUrl(),
             'text' => $content,
             ...$this->containerOptions,
             'access_token' => $accessToken,
@@ -230,10 +230,10 @@ class ThreadsPublisher
 
             if ($isVideo) {
                 $params['media_type'] = 'VIDEO';
-                $params['video_url'] = $media->url;
+                $params['video_url'] = $media->publishUrl();
             } else {
                 $params['media_type'] = 'IMAGE';
-                $params['image_url'] = $media->url;
+                $params['image_url'] = $media->publishUrl();
 
                 $alt = $media->altTextFor(Platform::Threads);
 

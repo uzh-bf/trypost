@@ -40,7 +40,7 @@ class Idea extends Model
     protected function casts(): array
     {
         return [
-            'media' => 'array',
+            'media' => \App\Casts\StoredMedia::class,
             'position' => 'integer',
         ];
     }

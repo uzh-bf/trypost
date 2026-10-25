@@ -115,7 +115,7 @@ class Post extends Model
             'recurrence_origin_at' => 'datetime',
             'created_via' => CreatedVia::class,
             'origin' => Origin::class,
-            'media' => 'array',
+            'media' => \App\Casts\StoredMedia::class,
             'scheduled_at' => 'datetime',
             'published_at' => 'datetime',
             'approval_requested_at' => 'datetime',
@@ -124,7 +124,7 @@ class Post extends Model
             'publish_status' => PublishStatus::class,
             'platform' => Platform::class,
             'content_type' => ContentType::class,
-            'meta' => 'array',
+            'meta' => \App\Casts\StoredMedia::class,
             'error_context' => 'array',
             'thread_reply_ids' => 'array',
             'submitted_at' => 'datetime',
@@ -460,7 +460,7 @@ class Post extends Model
     {
         return Attribute::make(
             get: fn (): ?string => $this->socialAccount?->avatar_url
-                ?: ($this->platform_avatar ? Storage::url($this->platform_avatar) : null),
+                ?: \App\Support\Media\MediaUrl::avatar($this->platform_avatar),
         );
     }
 

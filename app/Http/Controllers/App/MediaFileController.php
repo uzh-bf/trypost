@@ -19,6 +19,17 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 class MediaFileController extends Controller
 {
+    public function view(Request $request, Media $media): \Illuminate\Http\RedirectResponse
+    {
+        abort_unless($media->workspace !== null, 404);
+        abort_unless($request->user()->can('view', $media->workspace), 404);
+
+        return redirect()->away(\App\Support\Media\MediaUrl::temporary($media->path))->withHeaders([
+            'Cache-Control' => 'private, no-store',
+            'Referrer-Policy' => 'no-referrer',
+        ]);
+    }
+
     public function show(Request $request, Media $media): StreamedResponse
     {
         $workspace = $request->user()->currentWorkspace;

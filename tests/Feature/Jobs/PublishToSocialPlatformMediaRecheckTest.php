@@ -73,7 +73,25 @@ test('a still valid instagram feed image reaches the publisher', function () {
         ->and($this->account->platform)->toBe(Platform::Instagram);
 });
 
+test('missing owned attachments fail before a publisher can drop them', function (bool $inReply) {
+    config(['filesystems.verify_media' => true]);
+    Storage::delete($this->media->path);
+    if ($inReply) {
+        $this->post->update(['media' => [], 'meta' => ['thread_replies' => [[
+            'text' => 'fixture', 'media' => [MediaItem::fromMedia($this->media)->toArray()],
+        ]]]]);
+    }
+    $publisher = Mockery::mock(InstagramPublisher::class);
+    $publisher->shouldNotReceive('publish');
+    $this->app->instance(InstagramPublisher::class, $publisher);
+    (new PublishToSocialPlatform($this->post->fresh()))->handle();
+    expect($this->post->fresh()->publish_status)->toBe(PlatformStatus::Failed)
+        ->and(data_get($this->post->fresh()->error_context, 'reason'))->toBe('media_missing');
+})->with([false, true]);
+
 test('a resume of a publish the provider already accepted is not rechecked', function () {
+    config(['filesystems.verify_media' => true]);
+    Storage::delete($this->media->path);
     $this->media->update(['meta' => ['width' => 2000, 'height' => 1000]]);
     $this->post->update(['error_context' => [
         'category' => 'platform_unavailable',

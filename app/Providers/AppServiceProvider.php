@@ -40,12 +40,23 @@ use App\Socialite\DiscordProvider;
 use App\Socialite\InstagramProvider;
 use App\Socialite\LinkedInPageExtendSocialite;
 use App\Support\Auth\PasswordRequirements;
+use App\Support\Media\AzureUserDelegationSas;
+use App\Support\Media\FlatBlobAdapter;
+use AzureOss\Identity\TokenCredential;
+use AzureOss\Identity\WorkloadIdentityCredential;
+use AzureOss\Storage\Blob\BlobContainerClient;
+use AzureOss\Storage\Blob\Models\BlobContainerClientOptions;
+use AzureOss\Storage\BlobFlysystem\AzureBlobStorageAdapter;
+use AzureOss\Storage\Common\ApiVersion;
+use AzureOss\Storage\Common\Middleware\HttpClientOptions;
 use Carbon\CarbonImmutable;
+use GuzzleHttp\Psr7\Uri;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Auth\Notifications\VerifyEmail;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
+use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -53,6 +64,7 @@ use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
 use Laravel\Cashier\Cashier;
@@ -61,6 +73,7 @@ use Laravel\Nightwatch\Facades\Nightwatch;
 use Laravel\Nightwatch\Records\CacheEvent;
 use Laravel\Socialite\Facades\Socialite;
 use Laravel\Socialite\Two\GoogleProvider;
+use League\Flysystem\Filesystem;
 use PostHog\PostHog;
 use SocialiteProviders\Facebook\FacebookExtendSocialite;
 use SocialiteProviders\LinkedIn\LinkedInExtendSocialite;
@@ -75,6 +88,29 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        $this->app->singleton(TokenCredential::class, fn () => new WorkloadIdentityCredential);
+        $this->app->singleton(AzureUserDelegationSas::class, fn ($app) => new AzureUserDelegationSas(
+            $app->make(TokenCredential::class),
+            config('filesystems.disks.azure.account_name'),
+            config('filesystems.disks.azure.container'),
+        ));
+        $this->app->singleton(BlobContainerClient::class, function ($app) {
+            $config = config('filesystems.disks.azure');
+            if (! preg_match('/^[a-z0-9]{3,24}$/D', (string) $config['account_name'])
+                || ! preg_match('/^[a-z0-9](?:[a-z0-9-]{1,61}[a-z0-9])$/D', (string) $config['container'])) {
+                throw new \RuntimeException('Invalid Azure media storage configuration.');
+            }
+
+            return new BlobContainerClient(
+                new Uri('https://'.$config['account_name'].'.blob.core.windows.net/'.$config['container']),
+                $app->make(TokenCredential::class),
+                new BlobContainerClientOptions(
+                    new HttpClientOptions(timeout: 120, connectTimeout: 10),
+                    ApiVersion::V2024_08_04,
+                ),
+            );
+        });
+
         if ($this->app->environment('local') && class_exists(\Laravel\Telescope\TelescopeServiceProvider::class)) {
             $this->app->register(\Laravel\Telescope\TelescopeServiceProvider::class);
             $this->app->register(TelescopeServiceProvider::class);
@@ -92,11 +128,34 @@ class AppServiceProvider extends ServiceProvider
         $this->configureRateLimiting();
         $this->configureSocialite();
         $this->configureStripeWebhooks();
+        $this->configureAzureStorage();
 
         Cashier::useCustomerModel(Account::class);
         Cashier::useSubscriptionModel(Subscription::class);
         Cashier::useSubscriptionItemModel(SubscriptionItem::class);
         Cashier::keepPastDueSubscriptionsActive();
+    }
+
+    private function configureAzureStorage(): void
+    {
+        Storage::extend('azure-flat', function ($app, array $config) {
+            $adapter = new FlatBlobAdapter(
+                new AzureBlobStorageAdapter(
+                    $app->make(BlobContainerClient::class),
+                    visibilityHandling: AzureBlobStorageAdapter::ON_VISIBILITY_IGNORE,
+                ),
+            );
+            $disk = new FilesystemAdapter(new Filesystem($adapter, [
+                'initialTransferSize' => 8 * 1024 * 1024,
+                'maximumTransferSize' => 8 * 1024 * 1024,
+                'maximumConcurrency' => 1,
+            ]), $adapter, $config);
+            $disk->buildTemporaryUrlsUsing(fn ($path, $expiry) => $app->make(AzureUserDelegationSas::class)->url(
+                FlatBlobAdapter::encodePath($path), $expiry,
+            ));
+
+            return $disk;
+        });
     }
 
     protected function configureMorphMap(): void

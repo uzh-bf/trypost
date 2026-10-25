@@ -6,10 +6,22 @@ use App\Models\Account;
 use App\Models\Media;
 use App\Models\User;
 use App\Models\Workspace;
+use App\Services\Media\AzureBlockUploader;
 use App\Services\Media\ChunkedAssetReceiver;
 use App\Services\Media\ChunkedCloudUploader;
+use App\Support\Media\FlatBlobAdapter;
 use Aws\Result;
 use Aws\S3\S3Client;
+use AzureOss\Storage\Blob\BlobClient;
+use AzureOss\Storage\Blob\BlobContainerClient;
+use AzureOss\Storage\Blob\Specialized\BlockBlobClient;
+use GuzzleHttp\Client;
+use GuzzleHttp\ClientInterface;
+use GuzzleHttp\Handler\MockHandler;
+use GuzzleHttp\HandlerStack;
+use GuzzleHttp\Middleware;
+use GuzzleHttp\Psr7\Response;
+use GuzzleHttp\Psr7\Uri;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -72,6 +84,50 @@ function postChunkedAsset(string $fileName, string $content, int $rangeStart = 0
     );
 }
 
+function fakeAzureBlockUploader(?Closure $httpClientFactory = null, bool $useDefaultEncoder = false): AzureBlockUploader
+{
+    $container = new BlobContainerClient(new Uri('https://account.blob.core.windows.net/test-container'));
+
+    return new class($container, $httpClientFactory, $useDefaultEncoder) extends AzureBlockUploader
+    {
+        /** @var array<int, array{blob_name: string, block_id: string, bytes: string}> */
+        public array $stagedBlocks = [];
+
+        /** @var array<int, string> */
+        public array $committedBlockIds = [];
+
+        public ?string $committedContentType = null;
+
+        public function __construct(
+            BlobContainerClient $container,
+            ?Closure $httpClientFactory,
+            bool $useDefaultEncoder,
+        ) {
+            parent::__construct(
+                Cache::store(),
+                $container,
+                $useDefaultEncoder ? null : fn (string $path): string => 'flat/'.hash('sha256', $path),
+                $httpClientFactory,
+            );
+        }
+
+        protected function stageBlock(BlockBlobClient $client, string $blockId, string $chunk): void
+        {
+            $this->stagedBlocks[] = [
+                'blob_name' => $client->blobName,
+                'block_id' => $blockId,
+                'bytes' => $chunk,
+            ];
+        }
+
+        protected function commitBlocks(BlockBlobClient $client, array $blockIds, string $mimeType): void
+        {
+            $this->committedBlockIds = $blockIds;
+            $this->committedContentType = $mimeType;
+        }
+    };
+}
+
 // ─── Strategy selection (all disks × file types) ─────────────────
 
 test('shouldUseMultipart is only true for object-storage disks with video or pdf', function (string $disk, string $driver, string $fileName, bool $expected) {
@@ -83,7 +139,7 @@ test('shouldUseMultipart is only true for object-storage disks with video or pdf
     $uploader = new ChunkedCloudUploader(Cache::store(), disk: $disk);
 
     expect($uploader->shouldUseMultipart($fileName))->toBe($expected);
-    expect($uploader->isObjectStorageDisk($disk))->toBe($driver === 's3');
+    expect($uploader->isObjectStorageDisk($disk))->toBe(in_array($driver, ['s3', 'azure-flat'], true));
 })->with([
     'local video' => ['local', 'local', 'clip.mp4', false],
     'local pdf' => ['local', 'local', 'deck.pdf', false],
@@ -100,6 +156,9 @@ test('shouldUseMultipart is only true for object-storage disks with video or pdf
     'spaces video' => ['spaces', 's3', 'clip.mp4', true],
     'spaces pdf' => ['spaces', 's3', 'deck.pdf', true],
     'spaces image' => ['spaces', 's3', 'photo.png', false],
+    'azure video' => ['azure', 'azure-flat', 'clip.mp4', true],
+    'azure pdf' => ['azure', 'azure-flat', 'deck.pdf', true],
+    'azure image' => ['azure', 'azure-flat', 'photo.png', false],
 ]);
 
 // ─── Multipart mechanics (object storage) ────────────────────────
@@ -159,6 +218,174 @@ test('chunked cloud uploader reads a byte range from the stored object', functio
     $uploader = new ChunkedCloudUploader(Cache::store(), $client, 'test-bucket', 'r2');
 
     expect($uploader->readRange('medias/clip.mp4', 40, 16))->toBe('sixteen bytes!!!');
+});
+
+test('chunked cloud uploader routes azure upload and range operations to the azure block uploader', function () {
+    config([
+        'filesystems.default' => 'azure',
+        'filesystems.disks.azure.driver' => 'azure-flat',
+    ]);
+
+    $azure = Mockery::mock(AzureBlockUploader::class);
+    $azure->shouldReceive('receiveChunk')
+        ->once()
+        ->with('id-azure', 'clip.mp4', 'chunk', 0, 4, 10)
+        ->andReturn(['done' => false, 'progress' => 50]);
+    $azure->shouldReceive('readRange')
+        ->once()
+        ->with('medias/clip.mp4', 2, 3)
+        ->andReturn('cde');
+
+    $uploader = new ChunkedCloudUploader(Cache::store(), disk: 'azure', azure: $azure);
+
+    expect($uploader->isObjectStorageDisk())->toBeTrue();
+    expect($uploader->receiveChunk('id-azure', 'clip.mp4', 'chunk', 0, 4, 10))
+        ->toBe(['done' => false, 'progress' => 50]);
+    expect($uploader->readRange('medias/clip.mp4', 2, 3))->toBe('cde');
+});
+
+test('azure block uploader stages equal-width block ids and commits the ordered blocks once', function () {
+    $uploader = fakeAzureBlockUploader(useDefaultEncoder: true);
+    $firstChunk = str_pad(fakeMp4Bytes(), ChunkedCloudUploader::MIN_PART_BYTES, "\0");
+    $lastChunk = str_repeat('b', 50);
+    $totalSize = strlen($firstChunk) + strlen($lastChunk);
+
+    $first = $uploader->receiveChunk('azure-blocks', 'clip.mp4', $firstChunk, 0, strlen($firstChunk) - 1, $totalSize);
+    $replay = $uploader->receiveChunk('azure-blocks', 'clip.mp4', $firstChunk, 0, strlen($firstChunk) - 1, $totalSize);
+    $done = $uploader->receiveChunk('azure-blocks', 'clip.mp4', $lastChunk, strlen($firstChunk), $totalSize - 1, $totalSize);
+
+    expect($first)->toMatchArray(['done' => false]);
+    expect($replay)->toBe($first);
+    expect($uploader->stagedBlocks)->toHaveCount(2);
+    expect(array_column($uploader->stagedBlocks, 'block_id'))->toBe($uploader->committedBlockIds);
+    expect(array_map(fn (array $block): int => strlen($block['block_id']), $uploader->stagedBlocks))->each->toBe(12);
+    expect(base64_decode($uploader->stagedBlocks[0]['block_id'], true))->toBe('00000001');
+    expect(base64_decode($uploader->stagedBlocks[1]['block_id'], true))->toBe('00000002');
+    expect($done)->toMatchArray([
+        'done' => true,
+        'progress' => 100,
+        'size' => $totalSize,
+        'mime_type' => 'video/mp4',
+    ]);
+    expect($done['path'])->toMatch('/^medias\/[0-9a-f-]+\.mp4$/');
+    expect($uploader->stagedBlocks[0]['blob_name'])->toBe(FlatBlobAdapter::encodePath($done['path']));
+    expect($uploader->committedContentType)->toBe('video/mp4');
+    expect($uploader->receiveChunk('azure-blocks', 'clip.mp4', $lastChunk, strlen($firstChunk), $totalSize - 1, $totalSize))->toBe($done);
+});
+
+test('azure block uploader retries a failed first block against the same blob and block id', function () {
+    $uploader = new class extends AzureBlockUploader
+    {
+        /** @var array<int, string> */
+        public array $blobNames = [];
+
+        /** @var array<int, string> */
+        public array $blockIds = [];
+
+        public function __construct()
+        {
+            parent::__construct(
+                Cache::store(),
+                new BlobContainerClient(new Uri('https://account.blob.core.windows.net/test-container')),
+                fn (string $path): string => 'flat/'.hash('sha256', $path),
+            );
+        }
+
+        protected function stageBlock(BlockBlobClient $client, string $blockId, string $chunk): void
+        {
+            $this->blobNames[] = $client->blobName;
+            $this->blockIds[] = $blockId;
+
+            if (count($this->blockIds) === 1) {
+                throw new RuntimeException('transient stage failure');
+            }
+        }
+
+        protected function commitBlocks(BlockBlobClient $client, array $blockIds, string $mimeType): void {}
+    };
+    $part = str_repeat('a', ChunkedCloudUploader::MIN_PART_BYTES);
+    $totalSize = ChunkedCloudUploader::MIN_PART_BYTES + 1;
+
+    expect(fn () => $uploader->receiveChunk('azure-retry-failure', 'clip.mp4', $part, 0, strlen($part) - 1, $totalSize))
+        ->toThrow(RuntimeException::class, 'transient stage failure');
+
+    expect($uploader->receiveChunk('azure-retry-failure', 'clip.mp4', $part, 0, strlen($part) - 1, $totalSize))
+        ->toMatchArray(['done' => false]);
+    expect(array_unique($uploader->blobNames))->toHaveCount(1);
+    expect(array_unique($uploader->blockIds))->toHaveCount(1);
+});
+
+test('azure block uploader commits a pdf with the sniffed content type', function () {
+    $uploader = fakeAzureBlockUploader();
+    $pdf = "%PDF-1.7\n".str_repeat('a', 256);
+
+    $done = $uploader->receiveChunk('azure-pdf', 'deck.pdf', $pdf, 0, strlen($pdf) - 1, strlen($pdf));
+
+    expect($done)->toMatchArray([
+        'done' => true,
+        'progress' => 100,
+        'size' => strlen($pdf),
+        'mime_type' => 'application/pdf',
+    ]);
+    expect($done['path'])->toEndWith('.pdf');
+    expect($uploader->stagedBlocks)->toHaveCount(1);
+    expect($uploader->committedContentType)->toBe('application/pdf');
+});
+
+test('azure block uploader rejects sanitized session, ordering and minimum-size failures', function () {
+    $uploader = fakeAzureBlockUploader();
+    $part = str_repeat('a', ChunkedCloudUploader::MIN_PART_BYTES);
+
+    expect(fn () => $uploader->receiveChunk('azure-gap', 'clip.mp4', $part, ChunkedCloudUploader::MIN_PART_BYTES, ChunkedCloudUploader::MIN_PART_BYTES * 2 - 1, ChunkedCloudUploader::MIN_PART_BYTES * 3))
+        ->toThrow(RuntimeException::class, 'Chunked upload session expired or missing.');
+
+    $uploader->receiveChunk('azure-gap', 'clip.mp4', $part, 0, strlen($part) - 1, ChunkedCloudUploader::MIN_PART_BYTES * 3);
+
+    expect(fn () => $uploader->receiveChunk('azure-gap', 'clip.mp4', $part, ChunkedCloudUploader::MIN_PART_BYTES + 10, ChunkedCloudUploader::MIN_PART_BYTES * 2 + 9, ChunkedCloudUploader::MIN_PART_BYTES * 3))
+        ->toThrow(InvalidArgumentException::class, 'Chunk is out of order.');
+
+    expect(fn () => $uploader->receiveChunk('azure-small', 'clip.mp4', str_repeat('a', 100), 0, 99, ChunkedCloudUploader::MIN_PART_BYTES + 200))
+        ->toThrow(InvalidArgumentException::class);
+});
+
+test('azure block uploader reads an encoded blob with the requested range', function () {
+    $history = new ArrayObject;
+    $stack = HandlerStack::create(new MockHandler([
+        new Response(206, ['Content-Range' => 'bytes 40-55/1000'], 'sixteen bytes!!!'),
+    ]));
+    $stack->push(Middleware::history($history));
+    $uploader = fakeAzureBlockUploader(
+        fn (BlobClient $client): ClientInterface => new Client(['handler' => $stack]),
+    );
+
+    expect($uploader->readRange('medias/clip.mp4', 40, 16))->toBe('sixteen bytes!!!');
+    expect($history)->toHaveCount(1);
+    expect($history[0]['request']->getHeaderLine('Range'))->toBe('bytes=40-55');
+    expect($history[0]['request']->getUri()->getPath())->toBe(
+        '/test-container/flat/'.hash('sha256', 'medias/clip.mp4')
+    );
+});
+
+test('azure block uploader rejects a range request when azure ignores or overruns the range', function () {
+    $stack = HandlerStack::create(new MockHandler([
+        new Response(200, ['Content-Length' => '12000000'], 'whole object'),
+    ]));
+    $uploader = fakeAzureBlockUploader(
+        fn (BlobClient $client): ClientInterface => new Client(['handler' => $stack]),
+    );
+
+    expect(fn () => $uploader->readRange('medias/clip.mp4', 40, 16))
+        ->toThrow(RuntimeException::class, 'Azure stored object returned an invalid byte range.');
+
+    $overrunStack = HandlerStack::create(new MockHandler([
+        new Response(206, ['Content-Range' => 'bytes 40-55/1000'], str_repeat('x', 1000)),
+    ]));
+    $overrunUploader = fakeAzureBlockUploader(
+        fn (BlobClient $client): ClientInterface => new Client(['handler' => $overrunStack]),
+    );
+
+    expect(fn () => $overrunUploader->readRange('medias/clip.mp4', 40, 16))
+        ->toThrow(RuntimeException::class, 'Azure stored object returned an invalid byte range.');
 });
 
 test('chunked cloud uploader rejects undersized non-final parts', function () {
@@ -434,10 +661,10 @@ test('chunked upload rejects a non-numeric, negative or absurd duration header',
 
 // ─── HTTP: object storage ────────────────────────────────────────
 
-test('chunked upload uses multipart for videos on s3 disks', function (string $disk) {
+test('chunked upload uses multipart for videos on object-storage disks', function (string $disk, string $driver) {
     config([
         'filesystems.default' => $disk,
-        "filesystems.disks.{$disk}.driver" => 's3',
+        "filesystems.disks.{$disk}.driver" => $driver,
     ]);
     Storage::fake($disk);
     seedChunkedUploadWorkspace();
@@ -464,7 +691,12 @@ test('chunked upload uses multipart for videos on s3 disks', function (string $d
         'type' => 'video',
     ]);
     expect(test()->workspace->getMedia(Media::COLLECTION_UPLOADS)->first()->path)->toBe("medias/{$disk}-clip.mp4");
-})->with(['s3', 'r2', 'spaces']);
+})->with([
+    's3' => ['s3', 's3'],
+    'r2' => ['r2', 's3'],
+    'spaces' => ['spaces', 's3'],
+    'azure' => ['azure', 'azure-flat'],
+]);
 
 test('chunked upload on s3 still assembles images without multipart', function () {
     config([

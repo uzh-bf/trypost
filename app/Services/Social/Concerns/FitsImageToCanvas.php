@@ -40,7 +40,7 @@ trait FitsImageToCanvas
                 $path = self::CROP_DIRECTORY.'/'.Str::uuid()->toString().'.jpg';
                 Storage::put($path, file_get_contents($fitted));
 
-                return Storage::url($path);
+                return \App\Support\Media\MediaUrl::publishing($path);
             } finally {
                 @unlink($fitted);
             }

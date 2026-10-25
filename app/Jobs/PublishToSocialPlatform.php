@@ -115,6 +115,10 @@ class PublishToSocialPlatform implements ShouldBeUnique, ShouldQueue
             return;
         }
 
+        if ($this->failForMissingStoredMedia()) {
+            return;
+        }
+
         if ($this->failForInvalidMedia()) {
             return;
         }
@@ -251,6 +255,46 @@ class PublishToSocialPlatform implements ShouldBeUnique, ShouldQueue
         return true;
     }
 
+    private function failForMissingStoredMedia(): bool
+    {
+        if (! \App\Support\Media\MediaUrl::verifiesStorage()) {
+            return false;
+        }
+
+        $context = $this->post->error_context;
+        if (PublishCheckpoint::instagramWorkflow($context) !== null || PublishCheckpoint::tiktokPublishId($context) !== null) {
+            return false;
+        }
+
+        $items = [...($this->post->media ?? [])];
+        foreach (ThreadReplies::of($this->post->meta) as $reply) {
+            array_push($items, ...$reply['media']);
+        }
+
+        try {
+            foreach ($items as $item) {
+                $path = data_get($item, 'path');
+                if (is_string($path) && $path !== '' && ! \App\Support\Media\MediaUrl::exists($path)) {
+                    $this->failAndFinalize('A media attachment is unavailable.', $this->failureContext([
+                        'reason' => 'media_missing',
+                        'category' => ErrorCategory::MediaFormat->value,
+                    ]));
+
+                    return true;
+                }
+            }
+        } catch (\Throwable) {
+            $this->failAndFinalize('Media storage is unavailable.', $this->failureContext([
+                'reason' => 'media_unavailable',
+                'category' => ErrorCategory::MediaFormat->value,
+            ]));
+
+            return true;
+        }
+
+        return false;
+    }
+
     /**
      * Media can become invalid after scheduling (bounds changed in a release,
      * an edit through another path): recheck it against the same rule every
@@ -310,6 +354,7 @@ class PublishToSocialPlatform implements ShouldBeUnique, ShouldQueue
             ...($hasOwnPolicy ? ['max_retries' => $maxRetries, 'retry_delay_seconds' => $retryDelaySeconds] : []),
             'detail' => $e->getMessage(),
         ];
+        $context = \App\Support\Media\RedactStorageCredentials::clean($context);
 
         if ($retryCount > $maxRetries) {
             $this->reportCaughtPublishFailure($e, [
@@ -513,8 +558,8 @@ class PublishToSocialPlatform implements ShouldBeUnique, ShouldQueue
         $failureContext = [...$previousContext, ...($context ?? [])];
 
         $this->post->markPublicationFailed(
-            ThreadProgress::failureMessage($this->post, $message, $failureContext),
-            $failureContext === [] ? null : $failureContext,
+            \App\Support\Media\RedactStorageCredentials::clean(ThreadProgress::failureMessage($this->post, $message, $failureContext)),
+            $failureContext === [] ? null : \App\Support\Media\RedactStorageCredentials::clean($failureContext),
         );
     }
 

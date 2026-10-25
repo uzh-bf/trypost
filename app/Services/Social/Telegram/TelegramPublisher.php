@@ -125,7 +125,7 @@ class TelegramPublisher
      */
     private function telegramMedia(MediaItem $media): array
     {
-        return ['type' => TelegramMediaType::for($media), 'url' => $media->url];
+        return ['type' => TelegramMediaType::for($media), 'url' => $media->publishUrl()];
     }
 
     private function call(string $method, array $payload): Response

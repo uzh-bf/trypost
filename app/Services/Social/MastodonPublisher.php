@@ -82,7 +82,7 @@ class MastodonPublisher
         $mediaIds = [];
 
         foreach ($media->take(4) as $item) {
-            $mediaIds[] = $this->uploadMedia($account, $instance, $item->url, $item->original_filename, $item->isImage() ? $item->altTextFor(Platform::Mastodon) : null);
+            $mediaIds[] = $this->uploadMedia($account, $instance, $item->publishUrl(), $item->original_filename, $item->isImage() ? $item->altTextFor(Platform::Mastodon) : null);
         }
 
         return $mediaIds === [] ? [] : ['media_ids' => $mediaIds];

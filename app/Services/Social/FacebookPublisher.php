@@ -162,7 +162,7 @@ class FacebookPublisher
     private function publishSingleImagePost(string $pageId, string $accessToken, ?string $content, MediaItem $media): array
     {
         $response = $this->postToGraph("{$pageId}/photos", [
-            'url' => $media->url,
+            'url' => $media->publishUrl(),
             'access_token' => $accessToken,
             ...$this->optionalField('message', $content),
             ...$this->altText($media),
@@ -211,7 +211,7 @@ class FacebookPublisher
     {
         $response = $this->reachOrRetry(
             fn (): Response => $this->facebookHttp()->post("{$this->baseUrl}/{$pageId}/photos", [
-                'url' => $url ?? $media->url,
+                'url' => $url ?? $media->publishUrl(),
                 'published' => 'false',
                 'access_token' => $accessToken,
                 ...$this->altText($media),
@@ -239,7 +239,7 @@ class FacebookPublisher
     private function publishVideoPost(string $pageId, string $accessToken, ?string $content, MediaItem $media): array
     {
         $response = $this->postToGraph("{$pageId}/videos", [
-            'file_url' => $media->url,
+            'file_url' => $media->publishUrl(),
             'access_token' => $accessToken,
             ...$this->optionalField('description', $content),
         ], 'video post');
@@ -311,7 +311,7 @@ class FacebookPublisher
     private function publishPhotoStory(string $pageId, string $accessToken, MediaItem $media): array
     {
         $dimensions = ContentType::FacebookStory->preferredImageDimensions();
-        $fittedUrl = $this->fitImageToCanvas($media->url, data_get($dimensions, 'width'), data_get($dimensions, 'height'));
+        $fittedUrl = $this->fitImageToCanvas($media->publishUrl(), data_get($dimensions, 'width'), data_get($dimensions, 'height'));
 
         $photoId = $this->uploadUnpublishedPhoto($pageId, $accessToken, $media, $fittedUrl);
 
@@ -409,7 +409,7 @@ class FacebookPublisher
             fn (): Response => $this->socialHttp()
                 ->withHeaders([
                     'Authorization' => "OAuth {$accessToken}",
-                    'file_url' => $media->url,
+                    'file_url' => $media->publishUrl(),
                 ])
                 ->send('POST', $uploadUrl),
             'video upload',

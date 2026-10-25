@@ -173,14 +173,14 @@ class GoogleBusinessPublisher
     private function imageSourceUrl(MediaItem $media, Post $post): string
     {
         if (blank($media->path) || ! Storage::exists($media->path)) {
-            return $media->url;
+            return $media->publishUrl();
         }
 
         $input = tempnam(sys_get_temp_dir(), 'gbp_');
         $optimized = null;
 
         if ($input === false) {
-            return $media->url;
+            return $media->publishUrl();
         }
 
         try {
@@ -189,14 +189,14 @@ class GoogleBusinessPublisher
             $path = GoogleBusinessDerivativeCleaner::pathFor($post);
             Storage::put($path, file_get_contents($optimized));
 
-            return Storage::url($path);
+            return \App\Support\Media\MediaUrl::publishing($path);
         } catch (Throwable $e) {
             Log::warning('Google Business Profile image derivative failed; sending the original', [
                 'path' => $media->path,
                 'error' => $e->getMessage(),
             ]);
 
-            return $media->url;
+            return $media->publishUrl();
         } finally {
             @unlink($input);
 

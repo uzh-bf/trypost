@@ -1,0 +1,48 @@
+{
+  "generator": {
+    "package": "azure-storage-blob",
+    "version": "12.19.0",
+    "command": "uv run --with azure-storage-blob==12.19.0 python tests/fixtures/media/generate_user_delegation_sas.py",
+    "script_sha256": "918ab8c0ffeaf631d60596cd0e93930d41449839c9f594ba3a832bb555e5e7e0",
+    "notes": "Generated offline with the official Python SDK, a synthetic fixed delegation key, fixed timestamps, HTTPS-only read permission, and the SDK's 2023-11-03 SAS version. No Azure credentials or services were used."
+  },
+  "fixed": {
+    "account_name": "trypostsynthetic",
+    "container_name": "media",
+    "sas_version": "2023-11-03",
+    "start": "2026-10-25T09:55:00Z",
+    "expiry": "2026-10-26T12:00:00Z",
+    "delegation_key": {
+      "signed_oid": "11111111-1111-4111-8111-111111111111",
+      "signed_tid": "22222222-2222-4222-8222-222222222222",
+      "signed_start": "2026-10-25T09:55:00Z",
+      "signed_expiry": "2026-10-27T10:00:00Z",
+      "signed_service": "b",
+      "signed_version": "2023-11-03",
+      "value": "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
+    }
+  },
+  "vectors": [
+    {
+      "blob_name": "avatar-01~v1.webp",
+      "encoded_blob_name": "avatar-01~v1.webp",
+      "url": "https://trypostsynthetic.blob.core.windows.net/media/avatar-01~v1.webp?st=2026-10-25T09%3A55%3A00Z&se=2026-10-26T12%3A00%3A00Z&sp=r&spr=https&sv=2023-11-03&sr=b&skoid=11111111-1111-4111-8111-111111111111&sktid=22222222-2222-4222-8222-222222222222&skt=2026-10-25T09%3A55%3A00Z&ske=2026-10-27T10%3A00%3A00Z&sks=b&skv=2023-11-03&sig=k2%2BxwRZAEp%2BgA7K/D0eBkzBSnhgLO3AlfDGKlkY1h%2BY%3D",
+      "sas_query": "st=2026-10-25T09%3A55%3A00Z&se=2026-10-26T12%3A00%3A00Z&sp=r&spr=https&sv=2023-11-03&sr=b&skoid=11111111-1111-4111-8111-111111111111&sktid=22222222-2222-4222-8222-222222222222&skt=2026-10-25T09%3A55%3A00Z&ske=2026-10-27T10%3A00%3A00Z&sks=b&skv=2023-11-03&sig=k2%2BxwRZAEp%2BgA7K/D0eBkzBSnhgLO3AlfDGKlkY1h%2BY%3D",
+      "string_to_sign": "r\n2026-10-25T09:55:00Z\n2026-10-26T12:00:00Z\n/blob/trypostsynthetic/media/avatar-01~v1.webp\n11111111-1111-4111-8111-111111111111\n22222222-2222-4222-8222-222222222222\n2026-10-25T09:55:00Z\n2026-10-27T10:00:00Z\nb\n2023-11-03\n\n\n\n\nhttps\n2023-11-03\nb\n\n\n\n\n\n\n"
+    },
+    {
+      "blob_name": "photo #1 + cafe%?.jpg",
+      "encoded_blob_name": "photo%20%231%20%2B%20cafe%25%3F.jpg",
+      "url": "https://trypostsynthetic.blob.core.windows.net/media/photo%20%231%20%2B%20cafe%25%3F.jpg?st=2026-10-25T09%3A55%3A00Z&se=2026-10-26T12%3A00%3A00Z&sp=r&spr=https&sv=2023-11-03&sr=b&skoid=11111111-1111-4111-8111-111111111111&sktid=22222222-2222-4222-8222-222222222222&skt=2026-10-25T09%3A55%3A00Z&ske=2026-10-27T10%3A00%3A00Z&sks=b&skv=2023-11-03&sig=OEwQwUj8RzHeQdfRTjWXDw0/0LwBLzgee8r0NIMzzfc%3D",
+      "sas_query": "st=2026-10-25T09%3A55%3A00Z&se=2026-10-26T12%3A00%3A00Z&sp=r&spr=https&sv=2023-11-03&sr=b&skoid=11111111-1111-4111-8111-111111111111&sktid=22222222-2222-4222-8222-222222222222&skt=2026-10-25T09%3A55%3A00Z&ske=2026-10-27T10%3A00%3A00Z&sks=b&skv=2023-11-03&sig=OEwQwUj8RzHeQdfRTjWXDw0/0LwBLzgee8r0NIMzzfc%3D",
+      "string_to_sign": "r\n2026-10-25T09:55:00Z\n2026-10-26T12:00:00Z\n/blob/trypostsynthetic/media/photo #1 + cafe%?.jpg\n11111111-1111-4111-8111-111111111111\n22222222-2222-4222-8222-222222222222\n2026-10-25T09:55:00Z\n2026-10-27T10:00:00Z\nb\n2023-11-03\n\n\n\n\nhttps\n2023-11-03\nb\n\n\n\n\n\n\n"
+    },
+    {
+      "blob_name": "unicode-café.png",
+      "encoded_blob_name": "unicode-caf%C3%A9.png",
+      "url": "https://trypostsynthetic.blob.core.windows.net/media/unicode-caf%C3%A9.png?st=2026-10-25T09%3A55%3A00Z&se=2026-10-26T12%3A00%3A00Z&sp=r&spr=https&sv=2023-11-03&sr=b&skoid=11111111-1111-4111-8111-111111111111&sktid=22222222-2222-4222-8222-222222222222&skt=2026-10-25T09%3A55%3A00Z&ske=2026-10-27T10%3A00%3A00Z&sks=b&skv=2023-11-03&sig=Qo/2bXiESlAELaALBQcsgw3jFKkA/5Tqn7Z70IoRp1I%3D",
+      "sas_query": "st=2026-10-25T09%3A55%3A00Z&se=2026-10-26T12%3A00%3A00Z&sp=r&spr=https&sv=2023-11-03&sr=b&skoid=11111111-1111-4111-8111-111111111111&sktid=22222222-2222-4222-8222-222222222222&skt=2026-10-25T09%3A55%3A00Z&ske=2026-10-27T10%3A00%3A00Z&sks=b&skv=2023-11-03&sig=Qo/2bXiESlAELaALBQcsgw3jFKkA/5Tqn7Z70IoRp1I%3D",
+      "string_to_sign": "r\n2026-10-25T09:55:00Z\n2026-10-26T12:00:00Z\n/blob/trypostsynthetic/media/unicode-café.png\n11111111-1111-4111-8111-111111111111\n22222222-2222-4222-8222-222222222222\n2026-10-25T09:55:00Z\n2026-10-27T10:00:00Z\nb\n2023-11-03\n\n\n\n\nhttps\n2023-11-03\nb\n\n\n\n\n\n\n"
+    }
+  ]
+}

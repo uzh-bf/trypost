@@ -64,7 +64,7 @@ class MediaItem
         return [
             'id' => $this->id,
             'path' => $this->path,
-            'url' => $this->url,
+            'url' => \App\Support\Media\MediaUrl::verifiesStorage() ? \App\Support\Media\MediaUrl::canonical($this->path, $this->id) : $this->url,
             'type' => $this->type?->value,
             'mime_type' => $this->mime_type,
             'original_filename' => $this->original_filename,
@@ -80,6 +80,11 @@ class MediaItem
     public function isVideo(): bool
     {
         return $this->kind() === Type::Video;
+    }
+
+    public function publishUrl(): string
+    {
+        return \App\Support\Media\MediaUrl::publishing($this->path, $this->url);
     }
 
     public function isImage(): bool

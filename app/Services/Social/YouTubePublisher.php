@@ -151,7 +151,7 @@ class YouTubePublisher
     {
         $response = Http::withOptions(['sink' => $path])
             ->timeout(600)
-            ->get($media->url);
+            ->get($media->publishUrl());
 
         if ($response->failed()) {
             throw new YouTubePublishException(

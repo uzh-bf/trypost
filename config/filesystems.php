@@ -17,6 +17,8 @@ return [
 
     'default' => env('FILESYSTEM_DISK', 'public'),
 
+    'verify_media' => (bool) env('MEDIA_VERIFY_STORAGE', false),
+
     /*
     |--------------------------------------------------------------------------
     | Filesystem Disks
@@ -31,6 +33,14 @@ return [
     */
 
     'disks' => [
+
+        'azure' => [
+            'driver' => 'azure-flat',
+            'account_name' => env('AZURE_STORAGE_ACCOUNT'),
+            'container' => env('AZURE_STORAGE_CONTAINER', 'media'),
+            'throw' => true,
+            'report' => false,
+        ],
 
         'local' => [
             'driver' => 'local',

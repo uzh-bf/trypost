@@ -24,7 +24,7 @@ class IdeaResource extends JsonResource
             'title' => $this->title,
             'body' => $this->body,
             'position' => $this->position,
-            'media' => $this->media ?? [],
+            'media' => \App\Support\Media\MediaUrl::apiItems($this->media ?? [], $this->workspace_id),
             'labels' => LabelResource::collection($this->whenLoaded('labels')),
             'created_at' => $this->created_at->format('Y-m-d H:i:s'),
             'updated_at' => $this->updated_at->format('Y-m-d H:i:s'),

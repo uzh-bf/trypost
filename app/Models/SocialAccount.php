@@ -322,7 +322,7 @@ class SocialAccount extends Model
     protected function avatarUrl(): Attribute
     {
         return Attribute::make(
-            get: fn (?string $value) => $value ? Storage::url($value) : null,
+            get: fn (?string $value) => \App\Support\Media\MediaUrl::avatar($value),
         );
     }
 

@@ -29,6 +29,7 @@ class ChunkedCloudUploader
         private readonly ?S3Client $client = null,
         private readonly ?string $bucket = null,
         private readonly ?string $disk = null,
+        private readonly ?AzureBlockUploader $azure = null,
     ) {}
 
     /**
@@ -47,11 +48,15 @@ class ChunkedCloudUploader
 
     public function isObjectStorageDisk(?string $disk = null): bool
     {
-        return $this->diskOption('driver', $disk) === 's3';
+        return in_array($this->diskOption('driver', $disk), ['s3', 'azure-flat'], true);
     }
 
     public function readRange(string $key, int $offset, int $length): string
     {
+        if ($this->usesAzure()) {
+            return $this->azure()->readRange($key, $offset, $length);
+        }
+
         $lastByte = $offset + $length - 1;
 
         $object = $this->s3()->getObject([
@@ -74,6 +79,17 @@ class ChunkedCloudUploader
         int $rangeEnd,
         int $totalSize,
     ): array {
+        if ($this->usesAzure()) {
+            return $this->azure()->receiveChunk(
+                $identifier,
+                $fileName,
+                $chunk,
+                $rangeStart,
+                $rangeEnd,
+                $totalSize,
+            );
+        }
+
         $cacheKey = self::CACHE_PREFIX.$identifier;
         $chunkSize = strlen($chunk);
         $isLastChunk = ($rangeEnd + 1) >= $totalSize;
@@ -250,6 +266,16 @@ class ChunkedCloudUploader
         }
 
         return $adapter->getClient();
+    }
+
+    private function usesAzure(): bool
+    {
+        return $this->diskOption('driver') === 'azure-flat';
+    }
+
+    private function azure(): AzureBlockUploader
+    {
+        return $this->azure ?? app(AzureBlockUploader::class);
     }
 
     private function bucket(): string

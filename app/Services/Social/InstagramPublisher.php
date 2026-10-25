@@ -104,7 +104,7 @@ class InstagramPublisher
     private function publishSingleImage(string $instagramId, string $accessToken, ?string $content, $media): array
     {
         $params = [
-            'image_url' => $media->url,
+            'image_url' => $media->publishUrl(),
             'caption' => $content,
             'access_token' => $accessToken,
         ];
@@ -125,7 +125,7 @@ class InstagramPublisher
     private function publishReel(string $instagramId, string $accessToken, ?string $content, $media): array
     {
         $containerId = $this->createContainer($instagramId, [
-            'video_url' => $media->url,
+            'video_url' => $media->publishUrl(),
             'caption' => $content,
             'media_type' => 'REELS',
             'access_token' => $accessToken,
@@ -148,10 +148,10 @@ class InstagramPublisher
         ];
 
         if ($isVideo) {
-            $params['video_url'] = $media->url;
+            $params['video_url'] = $media->publishUrl();
         } else {
             $dimensions = ContentType::InstagramStory->preferredImageDimensions();
-            $params['image_url'] = $this->fitImageToCanvas($media->url, data_get($dimensions, 'width'), data_get($dimensions, 'height'));
+            $params['image_url'] = $this->fitImageToCanvas($media->publishUrl(), data_get($dimensions, 'width'), data_get($dimensions, 'height'));
             $params = [...$params, ...$this->userTagsParam(array_map(
                 fn (array $tag): array => ['username' => $tag['username']],
                 $media->userTags(),
@@ -178,11 +178,11 @@ class InstagramPublisher
             ];
 
             if ($isVideo) {
-                $params['video_url'] = $media->url;
+                $params['video_url'] = $media->publishUrl();
                 $params['media_type'] = 'VIDEO';
                 $params = [...$params, ...$this->thumbOffsetParam($media)];
             } else {
-                $params['image_url'] = $media->url;
+                $params['image_url'] = $media->publishUrl();
 
                 $alt = $media->altTextFor(Platform::Instagram);
 
