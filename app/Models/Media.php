@@ -7,6 +7,7 @@ namespace App\Models;
 use App\Enums\Media\Type as MediaType;
 use App\Exceptions\MediaOwnershipViolation;
 use App\Jobs\Media\DeleteMediaFiles;
+use App\Support\Media\MediaUrl;
 use Database\Factories\MediaFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
@@ -164,7 +165,7 @@ class Media extends Model
     protected function url(): Attribute
     {
         return Attribute::make(
-            get: fn () => \App\Support\Media\MediaUrl::browser($this),
+            get: fn () => MediaUrl::browser($this),
         );
     }
 

@@ -4,14 +4,20 @@ declare(strict_types=1);
 
 use App\Dto\MediaItem;
 use App\Http\Resources\Api\PostResource;
+use App\Jobs\DispatchWebhook;
 use App\Mcp\Servers\TryPostServer;
 use App\Mcp\Tools\Post\GetPostTool;
 use App\Models\Media;
 use App\Models\Post;
 use App\Models\User;
+use App\Models\Webhook;
+use App\Models\WebhookLog;
 use App\Models\Workspace;
+use App\Services\Http\SafeHttpFetcher;
+use App\Services\WebhookService;
 use App\Support\Media\MediaUrl;
 use App\Support\Media\RedactStorageCredentials;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Testing\Fluent\AssertableJson;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -152,26 +158,39 @@ test('the publishing consumer resolves media access when it executes', function 
         ->and($this->signing->requests[0][1]->getTimestamp())->toBe(now()->addHours(26)->getTimestamp());
 });
 
-
 test('webhook retries renew file links and sign the wire body while logs keep canonical references', function () {
     $post = Post::factory()->create(['workspace_id' => $this->workspace->id, 'user_id' => $this->user->id]);
     $post->update(['media' => [MediaItem::fromMedia($this->media)->toArray()], 'platform_avatar' => 'avatars/test.png']);
     Storage::put('avatars/test.png', 'synthetic-avatar');
-    $webhook = \App\Models\Webhook::factory()->create(['workspace_id' => $this->workspace->id, 'endpoint' => 'https://8.8.8.8/webhook']);
-    $service = app(\App\Services\WebhookService::class);
+    $webhook = Webhook::factory()->create(['workspace_id' => $this->workspace->id, 'endpoint' => 'https://8.8.8.8/webhook']);
+    $service = app(WebhookService::class);
     $payload = $service->postPayload($post);
     expect(json_encode($payload))->not->toContain('sig=');
-    $job = new \App\Jobs\DispatchWebhook($webhook, 'post.created', $payload);
-    \Illuminate\Support\Facades\Http::fake(fn () => \Illuminate\Support\Facades\Http::response('https://example.blob.core.windows.net/media/file?sig=synthetic', 200));
-    $job->handle(app(\App\Services\Http\SafeHttpFetcher::class), $service);
+    $job = new DispatchWebhook($webhook, 'post.created', $payload);
+    Http::fake(fn () => Http::response('https://example.blob.core.windows.net/media/file?sig=synthetic', 200));
+    $job->handle(app(SafeHttpFetcher::class), $service);
     $this->travel(20)->minutes();
-    $job->handle(app(\App\Services\Http\SafeHttpFetcher::class), $service);
-    \Illuminate\Support\Facades\Http::assertSent(function ($request) use ($service, $webhook) {
+    $job->handle(app(SafeHttpFetcher::class), $service);
+    Http::assertSent(function ($request) use ($service, $webhook) {
         return str_contains($request->data()['data']['media'][0]['url'], 'sig=synthetic')
             && $request->hasHeader('X-Webhook-Signature', $service->signature($request->data(), $webhook->signing_secret));
     });
-    $log = \App\Models\WebhookLog::findOrFail($job->logId);
+    $log = WebhookLog::findOrFail($job->logId);
     expect(json_encode([$job->payload, $log->payload, $log->response_body]))->not->toContain('sig=')
         ->and($this->signing->requests)->toHaveCount(4)
         ->and($this->signing->requests[2][1]->getTimestamp())->toBeGreaterThan($this->signing->requests[0][1]->getTimestamp());
+});
+
+test('a queued webhook still delivers its lifecycle event after an attachment disappears', function () {
+    $post = Post::factory()->create(['workspace_id' => $this->workspace->id, 'user_id' => $this->user->id]);
+    $post->update(['media' => [MediaItem::fromMedia($this->media)->toArray()]]);
+    $webhook = Webhook::factory()->create(['workspace_id' => $this->workspace->id, 'endpoint' => 'https://8.8.8.8/webhook']);
+    $service = app(WebhookService::class);
+    $job = new DispatchWebhook($webhook, 'post.created', $service->postPayload($post));
+    Storage::delete($this->media->path);
+    Http::fake(fn () => Http::response('', 200));
+    $job->handle(app(SafeHttpFetcher::class), $service);
+    Http::assertSentCount(1);
+    expect(WebhookLog::findOrFail($job->logId)->delivered_at)->not->toBeNull()
+        ->and($this->signing->requests)->toBeEmpty();
 });

@@ -6,6 +6,7 @@ namespace App\Http\Resources\Api;
 
 use App\Enums\Post\Status;
 use App\Models\User;
+use App\Support\Media\MediaUrl;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -27,7 +28,7 @@ class PostResource extends JsonResource
             'post_group_id' => $this->post_group_id,
             'author' => $this->person($this->user),
             'content' => $this->content,
-            'media' => \App\Support\Media\MediaUrl::apiItems($this->media ?? [], $this->workspace_id),
+            'media' => MediaUrl::apiItems($this->media ?? [], $this->workspace_id),
             'status' => $this->status?->value,
             'schedule_mode' => $this->schedule_mode?->value,
             'scheduled_at' => $this->scheduled_at?->format('Y-m-d H:i:s'),
@@ -45,7 +46,7 @@ class PostResource extends JsonResource
             'publish_status' => $this->publish_status->value,
             'platform' => $this->platform?->value,
             'content_type' => $this->content_type?->value,
-            'meta' => $this->meta === null ? null : \App\Support\Media\MediaUrl::meta($this->meta, true, $this->workspace_id),
+            'meta' => $this->meta === null ? null : MediaUrl::meta($this->meta, true, $this->workspace_id),
             'platform_url' => $this->platform_url,
             'error_message' => $this->error_message,
             'display_name' => $this->display_name,

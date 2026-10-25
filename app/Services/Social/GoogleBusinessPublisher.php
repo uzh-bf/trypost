@@ -18,6 +18,7 @@ use App\Models\SocialAccount;
 use App\Services\Media\MediaOptimizer;
 use App\Services\Social\Concerns\HasSocialHttpClient;
 use App\Support\GoogleBusinessResourceName;
+use App\Support\Media\MediaUrl;
 use App\Support\Social\GoogleBusinessDerivativeCleaner;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Client\Response;
@@ -189,7 +190,7 @@ class GoogleBusinessPublisher
             $path = GoogleBusinessDerivativeCleaner::pathFor($post);
             Storage::put($path, file_get_contents($optimized));
 
-            return \App\Support\Media\MediaUrl::publishing($path);
+            return MediaUrl::publishing($path);
         } catch (Throwable $e) {
             Log::warning('Google Business Profile image derivative failed; sending the original', [
                 'path' => $media->path,

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Resources\Api;
 
 use App\Models\Idea;
+use App\Support\Media\MediaUrl;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -24,7 +25,7 @@ class IdeaResource extends JsonResource
             'title' => $this->title,
             'body' => $this->body,
             'position' => $this->position,
-            'media' => \App\Support\Media\MediaUrl::apiItems($this->media ?? [], $this->workspace_id),
+            'media' => MediaUrl::apiItems($this->media ?? [], $this->workspace_id),
             'labels' => LabelResource::collection($this->whenLoaded('labels')),
             'created_at' => $this->created_at->format('Y-m-d H:i:s'),
             'updated_at' => $this->updated_at->format('Y-m-d H:i:s'),

@@ -32,6 +32,8 @@ use App\Services\Social\ThreadsPublisher;
 use App\Services\Social\TikTokPublisher;
 use App\Services\Social\XPublisher;
 use App\Services\Social\YouTubePublisher;
+use App\Support\Media\MediaUrl;
+use App\Support\Media\RedactStorageCredentials;
 use App\Support\Social\GoogleBusinessDerivativeCleaner;
 use App\Support\Social\LimitRetryPolicy;
 use App\Support\Social\PublishCheckpoint;
@@ -257,7 +259,7 @@ class PublishToSocialPlatform implements ShouldBeUnique, ShouldQueue
 
     private function failForMissingStoredMedia(): bool
     {
-        if (! \App\Support\Media\MediaUrl::verifiesStorage()) {
+        if (! MediaUrl::verifiesStorage()) {
             return false;
         }
 
@@ -274,7 +276,7 @@ class PublishToSocialPlatform implements ShouldBeUnique, ShouldQueue
         try {
             foreach ($items as $item) {
                 $path = data_get($item, 'path');
-                if (is_string($path) && $path !== '' && ! \App\Support\Media\MediaUrl::exists($path)) {
+                if (is_string($path) && $path !== '' && ! MediaUrl::exists($path)) {
                     $this->failAndFinalize('A media attachment is unavailable.', $this->failureContext([
                         'reason' => 'media_missing',
                         'category' => ErrorCategory::MediaFormat->value,
@@ -283,7 +285,7 @@ class PublishToSocialPlatform implements ShouldBeUnique, ShouldQueue
                     return true;
                 }
             }
-        } catch (\Throwable) {
+        } catch (Throwable) {
             $this->rescheduleForRetry(new PlatformUnavailableException(
                 'Media storage is unavailable.',
                 context: ['reason' => 'media_unavailable'],
@@ -356,7 +358,7 @@ class PublishToSocialPlatform implements ShouldBeUnique, ShouldQueue
             ...($hasOwnPolicy ? ['max_retries' => $maxRetries, 'retry_delay_seconds' => $retryDelaySeconds] : []),
             'detail' => $e->getMessage(),
         ];
-        $context = \App\Support\Media\RedactStorageCredentials::clean($context);
+        $context = RedactStorageCredentials::clean($context);
 
         if ($retryCount > $maxRetries) {
             $this->reportCaughtPublishFailure($e, [
@@ -560,8 +562,8 @@ class PublishToSocialPlatform implements ShouldBeUnique, ShouldQueue
         $failureContext = [...$previousContext, ...($context ?? [])];
 
         $this->post->markPublicationFailed(
-            \App\Support\Media\RedactStorageCredentials::clean(ThreadProgress::failureMessage($this->post, $message, $failureContext)),
-            $failureContext === [] ? null : \App\Support\Media\RedactStorageCredentials::clean($failureContext),
+            RedactStorageCredentials::clean(ThreadProgress::failureMessage($this->post, $message, $failureContext)),
+            $failureContext === [] ? null : RedactStorageCredentials::clean($failureContext),
         );
     }
 

@@ -8,6 +8,7 @@ use App\Enums\Media\Source;
 use App\Enums\Media\Type;
 use App\Enums\SocialAccount\Platform;
 use App\Models\Media;
+use App\Support\Media\MediaUrl;
 
 class MediaItem
 {
@@ -64,7 +65,7 @@ class MediaItem
         return [
             'id' => $this->id,
             'path' => $this->path,
-            'url' => \App\Support\Media\MediaUrl::verifiesStorage() ? \App\Support\Media\MediaUrl::canonical($this->path, $this->id) : $this->url,
+            'url' => MediaUrl::verifiesStorage() ? MediaUrl::canonical($this->path, $this->id) : $this->url,
             'type' => $this->type?->value,
             'mime_type' => $this->mime_type,
             'original_filename' => $this->original_filename,
@@ -84,7 +85,7 @@ class MediaItem
 
     public function publishUrl(): string
     {
-        return \App\Support\Media\MediaUrl::publishing($this->path, $this->url);
+        return MediaUrl::publishing($this->path, $this->url);
     }
 
     public function isImage(): bool

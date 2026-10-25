@@ -19,6 +19,7 @@ use App\Models\Scopes\SocialAccountOrderScope;
 use App\Observers\ComposerVersionObserver;
 use App\Observers\SocialAccountObserver;
 use App\Support\GoogleBusinessResourceName;
+use App\Support\Media\MediaUrl;
 use Database\Factories\SocialAccountFactory;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Database\Eloquent\Attributes\ObservedBy;
@@ -33,7 +34,6 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 
 #[ObservedBy([SocialAccountObserver::class, ComposerVersionObserver::class])]
 #[ScopedBy(SocialAccountOrderScope::class)]
@@ -322,7 +322,7 @@ class SocialAccount extends Model
     protected function avatarUrl(): Attribute
     {
         return Attribute::make(
-            get: fn (?string $value) => \App\Support\Media\MediaUrl::avatar($value),
+            get: fn (?string $value) => MediaUrl::avatar($value),
         );
     }
 
