@@ -284,10 +284,12 @@ class PublishToSocialPlatform implements ShouldBeUnique, ShouldQueue
                 }
             }
         } catch (\Throwable) {
-            $this->failAndFinalize('Media storage is unavailable.', $this->failureContext([
-                'reason' => 'media_unavailable',
-                'category' => ErrorCategory::MediaFormat->value,
-            ]));
+            $this->rescheduleForRetry(new PlatformUnavailableException(
+                'Media storage is unavailable.',
+                context: ['reason' => 'media_unavailable'],
+            ));
+            $this->updatePostStatus();
+            $this->broadcastStatus();
 
             return true;
         }

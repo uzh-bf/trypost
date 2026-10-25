@@ -151,3 +151,27 @@ test('the publishing consumer resolves media access when it executes', function 
     expect($this->signing->requests)->toHaveCount(1)
         ->and($this->signing->requests[0][1]->getTimestamp())->toBe(now()->addHours(26)->getTimestamp());
 });
+
+
+test('webhook retries renew file links and sign the wire body while logs keep canonical references', function () {
+    $post = Post::factory()->create(['workspace_id' => $this->workspace->id, 'user_id' => $this->user->id]);
+    $post->update(['media' => [MediaItem::fromMedia($this->media)->toArray()], 'platform_avatar' => 'avatars/test.png']);
+    Storage::put('avatars/test.png', 'synthetic-avatar');
+    $webhook = \App\Models\Webhook::factory()->create(['workspace_id' => $this->workspace->id, 'endpoint' => 'https://8.8.8.8/webhook']);
+    $service = app(\App\Services\WebhookService::class);
+    $payload = $service->postPayload($post);
+    expect(json_encode($payload))->not->toContain('sig=');
+    $job = new \App\Jobs\DispatchWebhook($webhook, 'post.created', $payload);
+    \Illuminate\Support\Facades\Http::fake(fn () => \Illuminate\Support\Facades\Http::response('https://example.blob.core.windows.net/media/file?sig=synthetic', 200));
+    $job->handle(app(\App\Services\Http\SafeHttpFetcher::class), $service);
+    $this->travel(20)->minutes();
+    $job->handle(app(\App\Services\Http\SafeHttpFetcher::class), $service);
+    \Illuminate\Support\Facades\Http::assertSent(function ($request) use ($service, $webhook) {
+        return str_contains($request->data()['data']['media'][0]['url'], 'sig=synthetic')
+            && $request->hasHeader('X-Webhook-Signature', $service->signature($request->data(), $webhook->signing_secret));
+    });
+    $log = \App\Models\WebhookLog::findOrFail($job->logId);
+    expect(json_encode([$job->payload, $log->payload, $log->response_body]))->not->toContain('sig=')
+        ->and($this->signing->requests)->toHaveCount(4)
+        ->and($this->signing->requests[2][1]->getTimestamp())->toBeGreaterThan($this->signing->requests[0][1]->getTimestamp());
+});

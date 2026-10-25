@@ -119,3 +119,18 @@ test('a too-wide image fails the recheck even with a legacy aspect ratio', funct
 
     expect($this->post->fresh()->publish_status)->toBe(PlatformStatus::Failed);
 })->with(['1:1', '4:5', 'original']);
+
+
+test('a transient storage outage schedules a retry before any publisher call', function () {
+    config(['filesystems.verify_media' => true]);
+    \Illuminate\Support\Facades\Queue::fake();
+    Storage::shouldReceive('url')->andReturn('https://example.test/canonical');
+    Storage::shouldReceive('exists')->once()->andThrow(new RuntimeException('temporary storage failure'));
+    $publisher = Mockery::mock(InstagramPublisher::class);
+    $publisher->shouldNotReceive('publish');
+    $this->app->instance(InstagramPublisher::class, $publisher);
+    (new PublishToSocialPlatform($this->post->fresh()))->handle();
+    expect($this->post->fresh()->publish_status)->toBe(PlatformStatus::Retrying)
+        ->and(data_get($this->post->fresh()->error_context, 'reason'))->toBe('media_unavailable');
+    \Illuminate\Support\Facades\Queue::assertPushed(PublishToSocialPlatform::class);
+});

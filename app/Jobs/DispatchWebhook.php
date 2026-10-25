@@ -11,6 +11,7 @@ use App\Models\Webhook;
 use App\Models\WebhookLog;
 use App\Services\Http\SafeHttpFetcher;
 use App\Services\WebhookService;
+use App\Support\Media\RedactStorageCredentials;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -66,8 +67,6 @@ class DispatchWebhook implements ShouldQueue
             'created_at' => now()->toIso8601String(),
         ];
 
-        $signature = $webhooks->signature($body, $this->webhook->signing_secret);
-
         $log = WebhookLog::query()->find($this->logId);
 
         if ($log) {
@@ -91,6 +90,8 @@ class DispatchWebhook implements ShouldQueue
         }
 
         try {
+            $deliveryBody = [...$body, 'data' => $webhooks->deliveryPayload($body['data'], $this->webhook->workspace_id)];
+            $signature = $webhooks->signature($deliveryBody, $this->webhook->signing_secret);
             $response = $safeHttp->guardedRequest($this->webhook->endpoint, followRedirects: false)
                 ->timeout(10)
                 ->withUserAgent(config('trypost.user_agent'))
@@ -99,11 +100,11 @@ class DispatchWebhook implements ShouldQueue
                     'X-Webhook-Signature' => $signature,
                 ])
                 ->withOptions(['stream' => true])
-                ->post($this->webhook->endpoint, $body);
+                ->post($this->webhook->endpoint, $deliveryBody);
         } catch (ConnectionException|RuntimeException $e) {
             $log->update([
                 'failed_at' => now(),
-                'response_body' => $e->getMessage(),
+                'response_body' => RedactStorageCredentials::clean($e->getMessage()),
             ]);
 
             $log->refresh();
@@ -112,7 +113,7 @@ class DispatchWebhook implements ShouldQueue
             throw $e;
         }
 
-        $responseBody = mb_scrub(str_replace("\0", '', $safeHttp->bodyPrefix($response, self::RESPONSE_BODY_BYTES)), 'UTF-8');
+        $responseBody = RedactStorageCredentials::clean(mb_scrub(str_replace("\0", '', $safeHttp->bodyPrefix($response, self::RESPONSE_BODY_BYTES)), 'UTF-8'));
 
         if ($response->successful()) {
             $log->update([
