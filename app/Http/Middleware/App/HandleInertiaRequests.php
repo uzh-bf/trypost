@@ -21,6 +21,7 @@ use App\Http\Resources\App\PlanResource;
 use App\Models\Plan;
 use App\Models\Workspace;
 use App\Support\Ai\AiModelCatalog;
+use App\Support\Ai\WritingStyleCatalog;
 use App\Support\HeicConverter;
 use App\Support\LinkTlds;
 use Illuminate\Http\Request;
@@ -111,6 +112,7 @@ class HandleInertiaRequests extends Middleware
             'githubAuthEnabled' => fn (): bool => SocialAuthProvider::GitHub->isEnabled(),
             ...($user !== null ? [
                 'aiModels' => fn (): array => app(AiModelCatalog::class)->forFrontend(),
+                'aiWritingStyles' => fn (): array => app(WritingStyleCatalog::class)->forFrontend(),
                 'mediaSources' => fn (): array => ['menu' => MediaSource::menu()],
                 'mediaUploadLimits' => fn (): array => [
                     'max_bytes' => [

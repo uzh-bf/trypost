@@ -9,6 +9,7 @@ use App\Enums\Ai\PostAssistantMode;
 use App\Enums\SocialAccount\Platform;
 use App\Http\Requests\App\Ai\AssistPostContentRequest;
 use App\Support\Ai\AiModelCatalog;
+use App\Support\Ai\WritingStyleCatalog;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\JsonResponse;
@@ -30,6 +31,7 @@ class PostAiAssistantController extends Controller
         }
 
         $selection = app(AiModelCatalog::class)->resolve($request->validated('model_id'));
+        $writingStyleInstructions = app(WritingStyleCatalog::class)->resolve($request->validated('style_id'));
 
         try {
             $content = AssistPostContent::execute(
@@ -41,6 +43,7 @@ class PostAiAssistantController extends Controller
                 previousContent: $request->input('previous_content'),
                 platform: $request->enum('platform', Platform::class),
                 selection: $selection,
+                writingStyleInstructions: $writingStyleInstructions,
                 account: $request->filled('social_account_id')
                     ? $workspace->socialAccounts()->find($request->input('social_account_id'))
                     : null,

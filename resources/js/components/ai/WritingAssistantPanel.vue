@@ -12,6 +12,13 @@ import { computed, onBeforeUnmount, ref } from 'vue';
 import AiModelSelect from '@/components/ai/AiModelSelect.vue';
 import CharacterCounter from '@/components/CharacterCounter.vue';
 import { Button } from '@/components/ui/button';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { extractErrorMessage } from '@/lib/httpError';
 import {
@@ -68,6 +75,7 @@ const pendingMode = ref('generate');
 
 const http = useHttp({
     model_id: (page.props.aiModels?.default ?? null) as string | null,
+    style_id: page.props.aiWritingStyles?.default ?? 'default',
     mode: '',
     prompt: '',
     current_content: '',
@@ -79,6 +87,10 @@ const http = useHttp({
 onBeforeUnmount(() => {
     http.cancel();
 });
+
+const styleOptions = computed(
+    () => page.props.aiWritingStyles?.options ?? ['default'],
+);
 
 const spinnerLabel = computed(() =>
     REWRITE_MODES.includes(pendingMode.value as RewriteMode)
@@ -182,11 +194,42 @@ const accept = (): void => {
         class="flex min-h-full flex-col gap-4"
         data-testid="writing-assistant-panel"
     >
-        <AiModelSelect
-            v-model="http.model_id"
-            test-id="writing-assistant-model"
-            :disabled="busy"
-        />
+        <div class="space-y-3">
+            <AiModelSelect
+                v-model="http.model_id"
+                test-id="writing-assistant-model"
+                :disabled="busy"
+            />
+            <div v-if="styleOptions.length > 1" class="space-y-1.5">
+                <label
+                    for="writing-assistant-style"
+                    class="text-xs font-medium text-muted-foreground"
+                >
+                    {{ $t('posts.composer.ai_style') }}
+                </label>
+                <Select v-model="http.style_id" :disabled="busy">
+                    <SelectTrigger
+                        id="writing-assistant-style"
+                        data-testid="writing-assistant-style"
+                        class="w-full min-w-0"
+                    >
+                        <SelectValue>{{
+                            $t(`posts.composer.ai_style_${http.style_id}`)
+                        }}</SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem
+                            v-for="id in styleOptions"
+                            :key="id"
+                            :value="id"
+                            :data-testid="`writing-assistant-style-${id}`"
+                        >
+                            {{ $t(`posts.composer.ai_style_${id}`) }}
+                        </SelectItem>
+                    </SelectContent>
+                </Select>
+            </div>
+        </div>
         <template v-if="screen === 'actions'">
             <p class="text-sm">
                 {{ $t('posts.composer.assistant_question') }}

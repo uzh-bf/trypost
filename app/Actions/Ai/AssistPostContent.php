@@ -25,11 +25,12 @@ final class AssistPostContent
         ?Platform $platform,
         array $selection,
         ?SocialAccount $account = null,
+        ?string $writingStyleInstructions = null,
     ): string {
         $platform = $account->platform ?? $platform;
         $limit = $account?->maxContentLength() ?? $platform?->maxContentLength();
 
-        $response = (new PostWritingAssistant($mode, $currentContent, $user->locale, $platform, $previousContent, $limit))
+        $response = (new PostWritingAssistant($mode, $currentContent, $user->locale, $platform, $previousContent, $limit, $writingStyleInstructions))
             ->withModelSelection($selection)
             ->prompt(
                 $mode->requiresPrompt() ? trim((string) $prompt) : 'Revise the existing caption as instructed.',

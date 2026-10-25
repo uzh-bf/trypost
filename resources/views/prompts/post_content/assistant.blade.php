@@ -36,6 +36,18 @@ Write in {{ $language }}.
 Keep the language of the existing caption. Never translate it. If the language is unclear, write in {{ $language }}.
 @endif
 
+Writing guidance:
+Use concrete words, direct sentences and a natural rhythm. Remove generic filler, hype, stock transitions and repetitive conclusions. Keep already clear wording. Do not invent opinions, personal experiences or supporting facts.
+
+@if(filled($writing_style_instructions))
+Selected writing style (literal guidance):
+<writing-style>
+{!! $writing_style_instructions !!}
+</writing-style>
+@endif
+
+Facts, names, numbers, URLs, source language, output format and hard character limits take priority. Follow the requested action next, then the selected writing style, then softer platform tone suggestions.
+
 @if(filled($current_content))
 Existing caption:
 """
