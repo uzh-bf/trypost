@@ -84,11 +84,11 @@ function postChunkedAsset(string $fileName, string $content, int $rangeStart = 0
     );
 }
 
-function fakeAzureBlockUploader(?Closure $httpClientFactory = null, bool $useDefaultEncoder = false): AzureBlockUploader
+function fakeAzureBlockUploader(?Closure $httpClientFactory = null): AzureBlockUploader
 {
     $container = new BlobContainerClient(new Uri('https://account.blob.core.windows.net/test-container'));
 
-    return new class($container, $httpClientFactory, $useDefaultEncoder) extends AzureBlockUploader
+    return new class($container, $httpClientFactory) extends AzureBlockUploader
     {
         /** @var array<int, array{blob_name: string, block_id: string, bytes: string}> */
         public array $stagedBlocks = [];
@@ -101,12 +101,10 @@ function fakeAzureBlockUploader(?Closure $httpClientFactory = null, bool $useDef
         public function __construct(
             BlobContainerClient $container,
             ?Closure $httpClientFactory,
-            bool $useDefaultEncoder,
         ) {
             parent::__construct(
                 Cache::store(),
                 $container,
-                $useDefaultEncoder ? null : fn (string $path): string => 'flat/'.hash('sha256', $path),
                 $httpClientFactory,
             );
         }
@@ -245,7 +243,7 @@ test('chunked cloud uploader routes azure upload and range operations to the azu
 });
 
 test('azure block uploader stages equal-width block ids and commits the ordered blocks once', function () {
-    $uploader = fakeAzureBlockUploader(useDefaultEncoder: true);
+    $uploader = fakeAzureBlockUploader();
     $firstChunk = str_pad(fakeMp4Bytes(), ChunkedCloudUploader::MIN_PART_BYTES, "\0");
     $lastChunk = str_repeat('b', 50);
     $totalSize = strlen($firstChunk) + strlen($lastChunk);
@@ -362,7 +360,7 @@ test('azure block uploader reads an encoded blob with the requested range', func
     expect($history)->toHaveCount(1);
     expect($history[0]['request']->getHeaderLine('Range'))->toBe('bytes=40-55');
     expect($history[0]['request']->getUri()->getPath())->toBe(
-        '/test-container/flat/'.hash('sha256', 'medias/clip.mp4')
+        '/test-container/medias~clip.mp4'
     );
 });
 

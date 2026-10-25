@@ -31,23 +31,17 @@ class AzureBlockUploader
 
     private const MIME_SNIFF_BYTES = 8192;
 
-    /** @var (Closure(string): string)|null */
-    private readonly ?Closure $encodePath;
-
     /** @var (Closure(BlobClient): ClientInterface)|null */
     private readonly ?Closure $httpClientFactory;
 
     /**
-     * @param  (Closure(string): string)|null  $encodePath
      * @param  (Closure(BlobClient): ClientInterface)|null  $httpClientFactory
      */
     public function __construct(
         private readonly CacheRepository $cache,
         private readonly BlobContainerClient $container,
-        ?Closure $encodePath = null,
         ?Closure $httpClientFactory = null,
     ) {
-        $this->encodePath = $encodePath;
         $this->httpClientFactory = $httpClientFactory;
     }
 
@@ -83,7 +77,7 @@ class AzureBlockUploader
             throw new InvalidArgumentException('The requested byte range is invalid.');
         }
 
-        $client = $this->container->getBlobClient($this->encodedBlobName($key));
+        $client = $this->container->getBlobClient(FlatBlobAdapter::encodePath($key));
 
         return $this->downloadRange($client, $offset, $length);
     }
@@ -202,7 +196,7 @@ class AzureBlockUploader
 
         return [
             'path' => $path,
-            'blob_name' => $this->encodedBlobName($path),
+            'blob_name' => FlatBlobAdapter::encodePath($path),
             'mime_type' => $this->detectMimeType($header, $extension),
             'header' => $header,
             'block_ids' => [],
@@ -254,13 +248,6 @@ class AzureBlockUploader
         }
 
         return MediaType::mimeTypeFromExtension($extension) ?? 'application/octet-stream';
-    }
-
-    private function encodedBlobName(string $path): string
-    {
-        return $this->encodePath === null
-            ? FlatBlobAdapter::encodePath($path)
-            : ($this->encodePath)($path);
     }
 
     /**
