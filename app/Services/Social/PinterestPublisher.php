@@ -258,7 +258,7 @@ class PinterestPublisher
             $multipart[] = [
                 'name' => 'file',
                 'contents' => $videoStream,
-                'filename' => basename($media->publishUrl()),
+                'filename' => basename($media->path),
             ];
 
             $uploadResponse = Http::asMultipart()

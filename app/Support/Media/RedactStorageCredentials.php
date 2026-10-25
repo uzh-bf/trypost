@@ -22,7 +22,15 @@ final class RedactStorageCredentials
     public static function clean(mixed $value): mixed
     {
         if ($value instanceof Throwable) {
-            return ['type' => $value::class, 'message' => self::clean($value->getMessage())];
+            return [
+                'type' => $value::class,
+                'message' => self::clean($value->getMessage()),
+                'code' => $value->getCode(),
+                'file' => $value->getFile(),
+                'line' => $value->getLine(),
+                'trace' => array_map(fn (array $frame): array => self::clean(array_intersect_key($frame, array_flip(['file', 'line', 'class', 'type', 'function']))), $value->getTrace()),
+                'previous' => self::clean($value->getPrevious()),
+            ];
         }
         if (is_array($value)) {
             foreach ($value as $key => $item) {

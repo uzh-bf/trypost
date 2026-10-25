@@ -7,6 +7,7 @@ namespace App\Support\Media;
 use App\Models\Media;
 use Illuminate\Support\Facades\Storage;
 use RuntimeException;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Throwable;
 
 final class MediaUrl
@@ -91,7 +92,11 @@ final class MediaUrl
             return Storage::url($path);
         }
 
-        return self::exists($path) ? self::temporary($path, 60) : null;
+        try {
+            return self::temporary($path, 60);
+        } catch (Throwable) {
+            return null;
+        }
     }
 
     /** Rebuild only owned file references; external URLs and prose are data. */
@@ -122,9 +127,18 @@ final class MediaUrl
         }
 
         if (isset($value['path']) && is_string($value['path']) && $value['path'] !== '' && isset($value['id'])) {
-            abort_unless(Media::query()->whereKey($value['id'])->where('path', $value['path'])
-                ->when($workspaceId !== null, fn ($query) => $query->where('workspace_id', $workspaceId))->exists(), 404);
-            $value['url'] = self::temporary($value['path']);
+            $owned = Media::query()->whereKey($value['id'])->where('path', $value['path'])
+                ->when($workspaceId !== null, fn ($query) => $query->where('workspace_id', $workspaceId))->exists();
+            $value['url'] = null;
+            if ($owned) {
+                try {
+                    $value['url'] = self::temporary($value['path']);
+                } catch (HttpException $exception) {
+                    if ($exception->getStatusCode() !== 404) {
+                        throw $exception;
+                    }
+                }
+            }
         }
 
         foreach ($value as $key => $item) {

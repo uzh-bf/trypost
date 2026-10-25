@@ -7,8 +7,10 @@ use App\Http\Resources\Api\PostResource;
 use App\Jobs\DispatchWebhook;
 use App\Mcp\Servers\TryPostServer;
 use App\Mcp\Tools\Post\GetPostTool;
+use App\Mcp\Tools\Post\ListPostsTool;
 use App\Models\Media;
 use App\Models\Post;
+use App\Models\SocialAccount;
 use App\Models\User;
 use App\Models\Webhook;
 use App\Models\WebhookLog;
@@ -20,7 +22,8 @@ use App\Support\Media\RedactStorageCredentials;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Testing\Fluent\AssertableJson;
-use Symfony\Component\HttpKernel\Exception\HttpException;
+use Monolog\Handler\TestHandler;
+use Monolog\Logger;
 
 beforeEach(function () {
     $this->user = User::factory()->create();
@@ -74,12 +77,7 @@ test('another account and guests cannot mint a media link', function () {
 test('missing old staging objects fail before any link is signed', function () {
     Storage::delete($this->media->path);
     $this->actingAs($this->user)->get($this->media->url)->assertNotFound();
-    try {
-        MediaUrl::apiItems([MediaItem::fromMedia($this->media)->toArray()]);
-        test()->fail('Missing media must not be signed.');
-    } catch (HttpException $exception) {
-        expect($exception->getStatusCode())->toBe(404);
-    }
+    expect(MediaUrl::apiItems([MediaItem::fromMedia($this->media)->toArray()])[0]['url'])->toBeNull();
     expect($this->signing->requests)->toBeEmpty();
 });
 
@@ -124,7 +122,7 @@ test('token API responses mint file links without a browser session and enforce 
     $foreign = Media::factory()->temporaryUpload(Workspace::factory()->create())->create(['path' => 'medias/foreign.jpg']);
     Storage::put($foreign->path, 'fixture');
     $post->update(['media' => [MediaItem::fromMedia($foreign)->toArray()]]);
-    $this->withToken($token)->getJson(route('api.posts.show', $post))->assertNotFound();
+    $this->withToken($token)->getJson(route('api.posts.show', $post))->assertOk()->assertJsonPath('media.0.url', null);
     expect($this->signing->requests)->toHaveCount(1);
 });
 
@@ -135,7 +133,7 @@ test('config-only recovery checks missing files in API and browser without minti
     $post->update(['media' => [MediaItem::fromMedia($this->media)->toArray()]]);
     $this->actingAs($this->user)->get(route('app.media.view', $this->media))->assertNotFound();
     auth()->logout();
-    $this->withToken(passportToken($this->user, $this->workspace))->getJson(route('api.posts.show', $post))->assertNotFound();
+    $this->withToken(passportToken($this->user, $this->workspace))->getJson(route('api.posts.show', $post))->assertOk()->assertJsonPath('media.0.url', null);
     expect($this->signing->requests)->toBeEmpty();
 });
 
@@ -193,4 +191,39 @@ test('a queued webhook still delivers its lifecycle event after an attachment di
     Http::assertSentCount(1);
     expect(WebhookLog::findOrFail($job->logId)->delivered_at)->not->toBeNull()
         ->and($this->signing->requests)->toBeEmpty();
+});
+
+test('API and MCP lists remain usable when one attachment is missing', function () {
+    $missing = Media::factory()->temporaryUpload($this->workspace)->create(['path' => 'medias/gone.jpg']);
+    $post = Post::factory()->create(['workspace_id' => $this->workspace->id, 'user_id' => $this->user->id]);
+    $post->update(['media' => [MediaItem::fromMedia($this->media)->toArray(), MediaItem::fromMedia($missing)->toArray()]]);
+    Post::factory()->create(['workspace_id' => $this->workspace->id, 'user_id' => $this->user->id]);
+    $response = $this->withToken(passportToken($this->user, $this->workspace))->getJson(route('api.posts.index'))->assertOk();
+    $output = collect($response->json('data'))->firstWhere('id', $post->id);
+    expect($output['media'][0]['url'])->toContain('sig=synthetic')
+        ->and($output['media'][1]['url'])->toBeNull();
+    TryPostServer::actingAs($this->user)->tool(ListPostsTool::class, [])->assertOk()
+        ->assertStructuredContent(fn (AssertableJson $json) => $json->where('posts', fn ($posts) => count($posts) === 2
+            && collect($posts)->firstWhere('id', $post->id)['media'][1]['url'] === null)->etc());
+});
+
+test('avatar storage failures leave the page accessor usable', function () {
+    $account = SocialAccount::factory()->create(['workspace_id' => $this->workspace->id, 'avatar_url' => 'avatars/test.png']);
+    Storage::shouldReceive('exists')->once()->andThrow(new RuntimeException('temporary storage failure'));
+    expect($account->avatar_url)->toBeNull();
+});
+
+test('log redaction retains exception diagnostics without arguments or signed links', function () {
+    $url = 'https://example.blob.core.windows.net/media/a?sig=synthetic';
+    $error = new RuntimeException($url, 0, new LogicException($url));
+    $handler = new TestHandler;
+    $logger = new Logger('test', [$handler]);
+    (new RedactStorageCredentials)(new Illuminate\Log\Logger($logger));
+    $logger->error('fixture', ['exception' => $error]);
+    $record = $handler->getRecords()[0]->context['exception'];
+    expect($record['file'])->toBe($error->getFile())
+        ->and($record['line'])->toBe($error->getLine())
+        ->and($record['trace'])->not->toBeEmpty()
+        ->and($record['previous']['type'])->toBe(LogicException::class)
+        ->and(json_encode($record))->not->toContain('sig=', 'synthetic', '"args"');
 });

@@ -19,7 +19,6 @@ use App\Support\Media\MediaUrl;
 use Exception;
 use Illuminate\Support\Str;
 use RuntimeException;
-use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class WebhookService
 {
@@ -160,14 +159,10 @@ class WebhookService
             return $payload;
         }
         if (isset($payload['media'])) {
-            $payload['media'] = $this->deliveryMedia($payload['media'], $workspaceId);
+            $payload['media'] = MediaUrl::apiItems($payload['media'], $workspaceId);
         }
         if (isset($payload['meta'])) {
-            foreach ($payload['meta']['thread_replies'] ?? [] as $index => $reply) {
-                if (is_array($reply['media'] ?? null)) {
-                    $payload['meta']['thread_replies'][$index]['media'] = $this->deliveryMedia($reply['media'], $workspaceId);
-                }
-            }
+            $payload['meta'] = MediaUrl::meta($payload['meta'], true, $workspaceId);
         }
         if (array_key_exists('display_avatar', $payload)) {
             $post = Post::query()->whereKey($payload['id'] ?? '')->where('workspace_id', $workspaceId)->first();
@@ -175,27 +170,6 @@ class WebhookService
         }
 
         return $payload;
-    }
-
-    /**
-     * A queued event can outlive its files; keep its canonical references when they are gone.
-     *
-     * @param  array<array<string, mixed>>  $items
-     * @return array<array<string, mixed>>
-     */
-    private function deliveryMedia(array $items, string $workspaceId): array
-    {
-        return array_map(function (array $item) use ($workspaceId): array {
-            try {
-                return MediaUrl::apiItems($item, $workspaceId);
-            } catch (HttpException $exception) {
-                if ($exception->getStatusCode() !== 404) {
-                    throw $exception;
-                }
-
-                return MediaUrl::canonicalItems($item);
-            }
-        }, $items);
     }
 
     /**

@@ -722,7 +722,7 @@ test('pinterest publisher can publish video pin', function () {
             [
                 'id' => 'test-media-video',
                 'path' => 'media/2026-01/video.mp4',
-                'url' => 'https://example.com/media/2026-01/video.mp4',
+                'url' => 'https://example.com/media/2026-01/video.mp4?sig=synthetic',
                 'mime_type' => 'video/mp4',
                 'original_filename' => 'video.mp4',
             ],
@@ -749,6 +749,8 @@ test('pinterest publisher can publish video pin', function () {
 
         // Step 2: S3 upload
         if ($url === $s3UploadUrl) {
+            expect($request->body())->not->toContain('sig=synthetic');
+
             return Http::response('', 204);
         }
 
