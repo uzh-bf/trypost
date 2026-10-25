@@ -123,6 +123,7 @@ export interface SharedData {
     selfHosted: boolean;
     aiEnabled?: boolean;
     aiModels?: AiModelCatalog;
+    aiWritingStyles?: { default: string; options: string[] };
     legal: LegalLinks;
     contentTypeMediaRules?: Record<string, ContentTypeMediaRule>;
     defaultCropPresets?: CropPresetValue[];

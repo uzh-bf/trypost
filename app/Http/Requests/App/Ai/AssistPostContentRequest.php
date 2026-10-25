@@ -28,6 +28,7 @@ class AssistPostContentRequest extends FormRequest
 
         return [
             'model_id' => ['nullable', 'string', 'max:64'],
+            'style_id' => ['nullable', 'string', 'max:64'],
             'mode' => ['required', Rule::enum(PostAssistantMode::class)],
             'prompt' => [
                 Rule::requiredIf(fn (): bool => $mode?->requiresPrompt() ?? false),

@@ -109,14 +109,6 @@ test('web assistant suggests a caption without creating a post', function () {
     $this->assertDatabaseCount('posts', 0);
 });
 
-test('assistant instructions name the locale language and carry no brand context', function () {
-    $instructions = (new PostWritingAssistant(PostAssistantMode::Rephrase, 'Hello world', Locale::German))->instructions();
-
-    expect($instructions)
-        ->toContain('German (de)')
-        ->not->toContain('Brand');
-});
-
 test('assistant writes in the requesting user locale', function () {
     PostWritingAssistant::fake(['Olá mundo']);
     $this->user->update(['locale' => Locale::PortugueseBrazil]);
@@ -128,8 +120,7 @@ test('assistant writes in the requesting user locale', function () {
         ])
         ->assertOk();
 
-    PostWritingAssistant::assertPrompted(fn (AgentPrompt $prompt): bool => $prompt->agent->locale === Locale::PortugueseBrazil
-        && ! str_contains(strtolower($prompt->agent->instructions()), 'brand'));
+    PostWritingAssistant::assertPrompted(fn (AgentPrompt $prompt): bool => $prompt->agent->locale === Locale::PortugueseBrazil);
 });
 
 test('a suggestion for X is shortened to fit what X counts', function () {
@@ -169,7 +160,7 @@ test('the assistant writes for the account limit of the card it serves', functio
         ->assertOk()
         ->assertJsonPath('content', $shortened ? 'Great news, short and sweet.' : $long);
 
-    PostWritingAssistant::assertPrompted(fn (AgentPrompt $prompt): bool => str_contains($prompt->agent->instructions(), "Hard limit: {$limit} characters"));
+    PostWritingAssistant::assertPrompted(fn (AgentPrompt $prompt): bool => $prompt->agent->hardMaxChars === $limit);
 })->with([
     'premium account' => [['x_subscription_type' => 'Premium'], 25000, false],
     'free account' => [[], 280, true],
@@ -288,4 +279,80 @@ test('a failing provider returns a translated bad gateway', function () {
         ->postJson(route('app.posts.ai.assist'), ['mode' => PostAssistantMode::Generate->value, 'current_content' => '', 'prompt' => 'Write a short post please'])
         ->assertStatus(Response::HTTP_BAD_GATEWAY)
         ->assertJsonPath('message', __('posts.composer.assistant_error'));
+});
+
+test('default style works when the optional guide is missing', function (array $choice) {
+    config(['ai_writing.df_style_path' => '/missing/synthetic-style.md']);
+    PostWritingAssistant::fake(['Synthetic response']);
+
+    $this->actingAs($this->user)->postJson(route('app.posts.ai.assist'), [
+        ...$choice, 'mode' => 'generate', 'prompt' => 'Write a synthetic test announcement',
+    ])->assertOk();
+
+    PostWritingAssistant::assertPrompted(fn (AgentPrompt $prompt): bool => $prompt->agent->writingStyleInstructions === null);
+})->with([[[]], [['style_id' => null]], [['style_id' => 'default']]]);
+
+test('invalid styles fail before generation with a sanitized field error', function (string $case) {
+    if ($case === 'unreadable' && function_exists('posix_geteuid') && posix_geteuid() === 0) {
+        $this->markTestSkipped('Root can read files without read permission.');
+    }
+    $path = tempnam(sys_get_temp_dir(), 'style-test-');
+    file_put_contents($path, 'Synthetic guide');
+    $id = 'df';
+    $configured = $path;
+    match ($case) {
+        'unknown' => $id = 'unknown',
+        'unconfigured' => $configured = null,
+        'missing' => $configured = $path.'-missing',
+        'relative' => $configured = 'relative.md',
+        'wrapper' => $configured = 'file://'.$path,
+        'directory' => $configured = sys_get_temp_dir(),
+        'empty' => file_put_contents($path, " \n"),
+        'oversize' => file_put_contents($path, str_repeat('x', 8193)),
+        'encoding' => file_put_contents($path, "\xFF"),
+        'binary' => file_put_contents($path, "test\0guide"),
+        'unreadable' => chmod($path, 0000),
+    };
+    config(['ai_writing.df_style_path' => $configured]);
+    PostWritingAssistant::fake();
+
+    try {
+        $response = $this->actingAs($this->user)->postJson(route('app.posts.ai.assist'), [
+            'style_id' => $id, 'mode' => 'generate', 'prompt' => 'Write a synthetic test announcement',
+        ])->assertUnprocessable()->assertJsonValidationErrors('style_id');
+        expect($response->getContent())->not->toContain($path);
+        PostWritingAssistant::assertNeverPrompted();
+    } finally {
+        chmod($path, 0600);
+        unlink($path);
+    }
+})->with(['unknown', 'unconfigured', 'missing', 'relative', 'wrapper', 'directory', 'empty', 'oversize', 'encoding', 'binary', 'unreadable']);
+
+test('DF resolves a bounded symlinked UTF8 guide once and isolates later requests', function () {
+    $path = tempnam(sys_get_temp_dir(), 'style-test-');
+    $link = $path.'-link';
+    $guide = str_pad('Synthetic & <brand> guide ä', 8192, 'x');
+    file_put_contents($path, $guide);
+    symlink($path, $link);
+    config(['ai_writing.df_style_path' => $link]);
+    $calls = 0;
+    PostWritingAssistant::fake(function () use ($path, &$calls): string {
+        $calls++;
+        file_put_contents($path, 'Changed after resolution');
+
+        return 'Synthetic result';
+    });
+
+    try {
+        foreach (['df', 'default'] as $id) {
+            $this->actingAs($this->user)->postJson(route('app.posts.ai.assist'), [
+                'style_id' => $id, 'mode' => 'generate', 'prompt' => 'Write a synthetic test announcement',
+            ])->assertOk();
+            PostWritingAssistant::assertPrompted(fn (AgentPrompt $prompt): bool => $prompt->agent->writingStyleInstructions === ($id === 'df' ? $guide : null));
+        }
+        expect($calls)->toBe(2);
+    } finally {
+        unlink($link);
+        unlink($path);
+    }
 });

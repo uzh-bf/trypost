@@ -26,12 +26,14 @@ class PostWritingAssistant implements Agent, HasProviderOptions
         public ?Platform $platform = null,
         public ?string $previousContent = null,
         public ?int $hardMaxChars = null,
+        public readonly ?string $writingStyleInstructions = null,
     ) {}
 
     public function instructions(): string
     {
         return view('prompts.post_content.assistant', [
             'mode' => $this->mode->value,
+            'writing_style_instructions' => $this->writingStyleInstructions,
             'writes_new_text' => $this->mode->requiresPrompt(),
             'language' => $this->locale->promptLanguage(),
             'current_content' => $this->currentContent,

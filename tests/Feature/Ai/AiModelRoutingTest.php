@@ -63,21 +63,28 @@ function modelRoutingImage(Workspace $workspace): Media
     return $asset;
 }
 
-test('each selection binds the native protocol credential and bounded policy', function (string $id) {
+test('each selection binds the native protocol credential and bounded policy', function (string $id, string $style) {
+    $guide = 'Synthetic transport style marker & <literal>';
+    $path = tempnam(sys_get_temp_dir(), 'style-routing-');
+    file_put_contents($path, $guide);
+    $this->beforeApplicationDestroyed(fn () => unlink($path));
+    config(['ai_writing.df_style_path' => $path]);
     Http::fake(function (Request $request, array $options) {
         expect($options['timeout'])->toBe(50);
 
         return Http::response(modelRoutingReply($request, 'A suggestion.'));
     });
     $this->actingAs($this->user)->postJson(route('app.posts.ai.assist'), [
-        'model_id' => $id, 'mode' => 'rephrase', 'current_content' => 'Original caption',
+        'model_id' => $id, 'style_id' => $style, 'mode' => 'rephrase', 'current_content' => 'Original caption',
         'provider' => 'untrusted', 'model' => 'untrusted', 'url' => 'https://untrusted.test',
         'key' => 'untrusted', 'options' => ['model' => 'untrusted'],
     ])->assertOk()->assertJsonPath('content', 'A suggestion.');
 
     Http::assertSentCount(1);
-    Http::assertSent(function (Request $request) use ($id): bool {
+    Http::assertSent(function (Request $request) use ($id, $style, $guide): bool {
         $body = $request->data();
+        $serialized = json_encode($body, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        expect(str_contains($serialized, $guide))->toBe($style === 'df');
         expect($body['model'])->toBe(config("ai_models.profiles.{$id}.model"))
             ->and($body['reasoning'])->toBe(['effort' => 'low'])
             ->and($body)->not->toHaveKeys(['key', 'url', 'options']);
@@ -103,7 +110,7 @@ test('each selection binds the native protocol credential and bounded policy', f
 
         return true;
     });
-})->with(['sol', 'opus', 'gemini']);
+})->with(['sol', 'opus', 'gemini'])->with(['default', 'df']);
 
 test('omitted and null selection use the configured default', function (array $choice) {
     Http::fake(fn (Request $request) => Http::response(modelRoutingReply($request, 'Default suggestion.')));
@@ -210,14 +217,20 @@ test('empty alt text cannot replace the existing description', function () {
 });
 
 test('the nested fitting request retains the primary route and fitting budget', function (string $id) {
+    $guide = 'Synthetic fitting isolation marker';
+    $path = tempnam(sys_get_temp_dir(), 'style-fitting-');
+    file_put_contents($path, $guide);
+    $this->beforeApplicationDestroyed(fn () => unlink($path));
+    config(['ai_writing.df_style_path' => $path]);
     $calls = 0;
-    Http::fake(function (Request $request, array $options) use (&$calls) {
-        expect($options['timeout'])->toBe($calls === 0 ? 50 : 40);
+    Http::fake(function (Request $request, array $options) use (&$calls, $guide) {
+        expect($options['timeout'])->toBe($calls === 0 ? 50 : 40)
+            ->and(str_contains(json_encode($request->data()), $guide))->toBe($calls === 0);
 
         return Http::response(modelRoutingReply($request, $calls++ === 0 ? str_repeat('long caption ', 60) : 'Fits.'));
     });
     $this->actingAs($this->user)->postJson(route('app.posts.ai.assist'), [
-        'model_id' => $id, 'mode' => 'rephrase', 'current_content' => 'Original', 'platform' => 'bluesky',
+        'model_id' => $id, 'style_id' => 'df', 'mode' => 'rephrase', 'current_content' => 'Original', 'platform' => 'bluesky',
     ])->assertOk()->assertJsonPath('content', 'Fits.');
     Http::assertSentCount(2);
     foreach (Http::recorded() as [$request]) {
@@ -271,9 +284,10 @@ test('server policy options cannot replace sdk owned fields and caps', function 
 });
 
 test('safe catalog availability is independent of the unused openai key', function () {
-    config(['ai_models.profiles.sol.enabled' => false]);
+    config(['ai_models.profiles.sol.enabled' => false, 'ai_writing.df_style_path' => '/missing/private/style.md']);
     $this->actingAs($this->user)->get(route('app.posts.index'))->assertInertia(fn (AssertableInertia $page) => $page
         ->where('aiEnabled', true)
+        ->where('aiWritingStyles', ['default' => 'default', 'options' => ['default', 'df']])
         ->where('aiModels.default', 'sol')
         ->has('aiModels.options', 2)
         ->where('aiModels.options.0.id', 'opus')
@@ -301,7 +315,7 @@ test('the raw image boundary is admitted using storage metadata rather than row 
 });
 
 test('catalog metadata is not shared with guests', function () {
-    $this->get(route('login'))->assertInertia(fn (AssertableInertia $page) => $page->missing('aiModels')->where('aiEnabled', true));
+    $this->get(route('login'))->assertInertia(fn (AssertableInertia $page) => $page->missing('aiModels')->missing('aiWritingStyles')->where('aiEnabled', true));
 });
 
 test('legacy provider and credential handling remain with the native sdk', function (string $provider) {
