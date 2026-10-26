@@ -232,7 +232,7 @@ class XPublisher
         $tempFile = tempnam(sys_get_temp_dir(), 'x_media_');
 
         try {
-            $downloadResponse = Http::withOptions(['sink' => $tempFile])->timeout(600)->get($mediaItem->url);
+            $downloadResponse = Http::withOptions(['sink' => $tempFile])->timeout(600)->get($mediaItem->publishUrl());
 
             if ($downloadResponse->failed()) {
                 throw new XPublishException(

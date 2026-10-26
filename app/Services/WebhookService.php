@@ -15,6 +15,7 @@ use App\Models\Webhook;
 use App\Models\Workspace;
 use App\Models\WorkspaceLabel;
 use App\Services\Http\SafeHttpFetcher;
+use App\Support\Media\MediaUrl;
 use Exception;
 use Illuminate\Support\Str;
 use RuntimeException;
@@ -138,10 +139,37 @@ class WebhookService
             'error_message' => $post->error_message,
             'display_name' => $post->display_name,
             'display_username' => $post->display_username,
-            'display_avatar' => $post->display_avatar,
+            'display_avatar' => MediaUrl::isAzure()
+                ? (($path = $post->socialAccount?->getRawOriginal('avatar_url') ?: $post->platform_avatar) ? MediaUrl::canonical($path) : null)
+                : $post->display_avatar,
             'meta' => $post->meta ?? [],
             'social_account' => $this->socialAccountPayload($post->socialAccount),
         ];
+    }
+
+    /**
+     * Resolve file access for this delivery attempt without changing queued or logged state.
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    public function deliveryPayload(array $payload, string $workspaceId): array
+    {
+        if (! MediaUrl::isAzure()) {
+            return $payload;
+        }
+        if (isset($payload['media'])) {
+            $payload['media'] = MediaUrl::apiItems($payload['media'], $workspaceId);
+        }
+        if (isset($payload['meta'])) {
+            $payload['meta'] = MediaUrl::meta($payload['meta'], true, $workspaceId);
+        }
+        if (array_key_exists('display_avatar', $payload)) {
+            $post = Post::query()->whereKey($payload['id'] ?? '')->where('workspace_id', $workspaceId)->first();
+            $payload['display_avatar'] = MediaUrl::avatar($post?->socialAccount?->getRawOriginal('avatar_url') ?: $post?->platform_avatar);
+        }
+
+        return $payload;
     }
 
     /**

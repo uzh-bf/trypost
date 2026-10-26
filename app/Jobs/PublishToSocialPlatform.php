@@ -32,6 +32,8 @@ use App\Services\Social\ThreadsPublisher;
 use App\Services\Social\TikTokPublisher;
 use App\Services\Social\XPublisher;
 use App\Services\Social\YouTubePublisher;
+use App\Support\Media\MediaUrl;
+use App\Support\Media\RedactStorageCredentials;
 use App\Support\Social\GoogleBusinessDerivativeCleaner;
 use App\Support\Social\LimitRetryPolicy;
 use App\Support\Social\PublishCheckpoint;
@@ -112,6 +114,10 @@ class PublishToSocialPlatform implements ShouldBeUnique, ShouldQueue
         }
 
         if ($this->failForMissingScopes()) {
+            return;
+        }
+
+        if ($this->failForMissingStoredMedia()) {
             return;
         }
 
@@ -251,6 +257,48 @@ class PublishToSocialPlatform implements ShouldBeUnique, ShouldQueue
         return true;
     }
 
+    private function failForMissingStoredMedia(): bool
+    {
+        if (! MediaUrl::verifiesStorage()) {
+            return false;
+        }
+
+        $context = $this->post->error_context;
+        if (PublishCheckpoint::instagramWorkflow($context) !== null || PublishCheckpoint::tiktokPublishId($context) !== null) {
+            return false;
+        }
+
+        $items = [...($this->post->media ?? [])];
+        foreach (ThreadReplies::of($this->post->meta) as $reply) {
+            array_push($items, ...$reply['media']);
+        }
+
+        try {
+            foreach ($items as $item) {
+                $path = data_get($item, 'path');
+                if (is_string($path) && $path !== '' && ! MediaUrl::exists($path)) {
+                    $this->failAndFinalize('A media attachment is unavailable.', $this->failureContext([
+                        'reason' => 'media_missing',
+                        'category' => ErrorCategory::MediaFormat->value,
+                    ]));
+
+                    return true;
+                }
+            }
+        } catch (Throwable) {
+            $this->rescheduleForRetry(new PlatformUnavailableException(
+                'Media storage is unavailable.',
+                context: ['reason' => 'media_unavailable'],
+            ));
+            $this->updatePostStatus();
+            $this->broadcastStatus();
+
+            return true;
+        }
+
+        return false;
+    }
+
     /**
      * Media can become invalid after scheduling (bounds changed in a release,
      * an edit through another path): recheck it against the same rule every
@@ -310,6 +358,7 @@ class PublishToSocialPlatform implements ShouldBeUnique, ShouldQueue
             ...($hasOwnPolicy ? ['max_retries' => $maxRetries, 'retry_delay_seconds' => $retryDelaySeconds] : []),
             'detail' => $e->getMessage(),
         ];
+        $context = RedactStorageCredentials::clean($context);
 
         if ($retryCount > $maxRetries) {
             $this->reportCaughtPublishFailure($e, [
@@ -513,8 +562,8 @@ class PublishToSocialPlatform implements ShouldBeUnique, ShouldQueue
         $failureContext = [...$previousContext, ...($context ?? [])];
 
         $this->post->markPublicationFailed(
-            ThreadProgress::failureMessage($this->post, $message, $failureContext),
-            $failureContext === [] ? null : $failureContext,
+            RedactStorageCredentials::clean(ThreadProgress::failureMessage($this->post, $message, $failureContext)),
+            $failureContext === [] ? null : RedactStorageCredentials::clean($failureContext),
         );
     }
 

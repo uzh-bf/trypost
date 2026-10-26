@@ -6,6 +6,7 @@ namespace App\Services\Social\Concerns;
 
 use App\Exceptions\Social\SocialPublishException;
 use App\Services\Media\MediaOptimizer;
+use App\Support\Media\MediaUrl;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -40,7 +41,7 @@ trait FitsImageToCanvas
                 $path = self::CROP_DIRECTORY.'/'.Str::uuid()->toString().'.jpg';
                 Storage::put($path, file_get_contents($fitted));
 
-                return Storage::url($path);
+                return MediaUrl::publishing($path);
             } finally {
                 @unlink($fitted);
             }

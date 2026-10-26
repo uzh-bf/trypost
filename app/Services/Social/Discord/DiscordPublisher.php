@@ -152,7 +152,7 @@ class DiscordPublisher
     {
         $tempFile = tempnam(sys_get_temp_dir(), 'discord_media_');
 
-        $response = Http::withOptions(['sink' => $tempFile])->timeout(120)->get($item->url);
+        $response = Http::withOptions(['sink' => $tempFile])->timeout(120)->get($item->publishUrl());
 
         if ($response->failed() || (filesize($tempFile) ?: 0) === 0) {
             @unlink($tempFile);

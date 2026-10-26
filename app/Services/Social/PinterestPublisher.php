@@ -137,7 +137,7 @@ class PinterestPublisher
         $tempFile = tempnam(sys_get_temp_dir(), 'pin_image_');
 
         try {
-            $downloadResponse = Http::withOptions(['sink' => $tempFile])->timeout(600)->get($media->url);
+            $downloadResponse = Http::withOptions(['sink' => $tempFile])->timeout(600)->get($media->publishUrl());
 
             if ($downloadResponse->failed()) {
                 throw new PinterestPublishException(
@@ -237,7 +237,7 @@ class PinterestPublisher
         $videoStream = null;
 
         try {
-            $downloadResponse = Http::withOptions(['sink' => $tempFile])->timeout(600)->get($media->url);
+            $downloadResponse = Http::withOptions(['sink' => $tempFile])->timeout(600)->get($media->publishUrl());
 
             if ($downloadResponse->failed()) {
                 throw new PinterestPublishException(
@@ -258,7 +258,7 @@ class PinterestPublisher
             $multipart[] = [
                 'name' => 'file',
                 'contents' => $videoStream,
-                'filename' => basename($media->url),
+                'filename' => basename($media->path),
             ];
 
             $uploadResponse = Http::asMultipart()
@@ -305,7 +305,7 @@ class PinterestPublisher
         }
 
         $items = $medias->map(fn ($media) => [
-            'url' => $media->url,
+            'url' => $media->publishUrl(),
         ])->toArray();
 
         $payload = $this->applyPinTextFields([

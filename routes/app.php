@@ -266,6 +266,7 @@ Route::middleware(['auth', EnsureAccountReady::class, EnsureHasWorkspace::class]
 
     Route::post('media/chunked', [MediaUploadController::class, 'storeChunked'])->name('app.media.store-chunked');
     Route::get('media/{media}/file', [MediaFileController::class, 'show'])->whereUuid('media')->name('app.media.file');
+    Route::get('media/{media}/view', [MediaFileController::class, 'view'])->whereUuid('media')->name('app.media.view');
     Route::post('media/from-url', [MediaUploadController::class, 'storeFromUrl'])
         ->middleware('throttle:media-imports')
         ->name('app.media.store-from-url');

@@ -171,7 +171,7 @@ class BlueskyPublisher
 
         foreach ($medias->take(4) as $media) {
             if ($media->isImage()) {
-                $blob = $this->uploadBlob($account, $service, $media->url, $media->mime_type);
+                $blob = $this->uploadBlob($account, $service, $media->publishUrl(), $media->mime_type);
                 if (! $blob) {
                     throw new BlueskyPublishException(
                         userMessage: 'Media upload to Bluesky failed. Please try again.',
@@ -194,7 +194,7 @@ class BlueskyPublisher
         }
 
         $video = $medias->first(fn (MediaItem $media): bool => $media->isVideo());
-        $videoBlob = $video ? $this->uploadVideo($account, $service, $video->url, $video->mime_type) : null;
+        $videoBlob = $video ? $this->uploadVideo($account, $service, $video->publishUrl(), $video->mime_type) : null;
 
         if ($video && ! $videoBlob) {
             throw new BlueskyPublishException(

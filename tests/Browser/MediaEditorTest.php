@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Ai\Agents\MediaAltTextGenerator;
+use App\Dto\MediaItem;
 use App\Enums\PostPlatform\ContentType;
 use App\Jobs\Analytics\BootstrapAccountAnalytics;
 use App\Jobs\Analytics\CollectAccountDailySnapshot;
@@ -955,4 +956,31 @@ test('AI model choice generates alt text and admission failures preserve it', fu
     $page->assertValue('@media-editor-alt-text', 'Four coloured squares in a grid.')
         ->screenshot(false, "ai-models-alt-error-{$suffix}")->assertNoJavaScriptErrors();
     Http::assertNotSent(fn ($request): bool => str_contains($request->url(), 'gateway.example.test') || str_contains($request->url(), 'openrouter.ai'));
+})->with(['desktop' => [1280, 900, 'desktop'], 'compact' => [390, 844, 'compact']]);
+
+test('azure preview redirects and canvas edits survive draft save and reload', function (int $width, int $height, string $suffix) {
+    config(['filesystems.default' => 'azure', 'filesystems.disks.azure.driver' => 'azure-flat']);
+    Storage::fake('azure');
+    // The browser fixture serves bytes locally; protocol signing has separate SDK vectors.
+    Storage::disk('azure')->buildTemporaryUrlsUsing(function ($path) {
+        return route('app.media.file', Media::query()->where('path', $path)->firstOrFail());
+    });
+    [$post] = seedMediaEditorPost(ContentType::BlueskyPost);
+    $post->user->update(['name' => 'Demo Author', 'email' => 'author@example.test']);
+    $post->workspace->update(['name' => 'Demo Workspace']);
+    $post->socialAccount->update(['display_name' => 'Demo Channel', 'username' => 'demo.example.test']);
+    $media = Media::factory()->ownedByPost($post)->create(['path' => 'medias/blob-preview.png', 'mime_type' => 'image/png']);
+    Storage::put($media->path, file_get_contents(base_path('tests/fixtures/crop-quadrants.png')));
+    $post->update(['media' => [MediaItem::fromMedia($media)->toArray()]]);
+    $page = visit(route('app.posts.edit', $post))->resize($width, $height);
+    openMediaEditor($page, $post->social_account_id);
+    $page->click('@media-editor-rotate-right')->screenshot(false, "blob-canvas-{$suffix}")->click('@media-editor-apply');
+    saveMediaEditorDraft($page);
+    $saved = $post->fresh();
+    expect($saved->ownedMedia()->sole()->id)->not->toBe($media->id)
+        ->and($saved->getRawOriginal('media'))->not->toContain('sig=');
+    $page = visit(route('app.posts.edit', $saved))->resize($width, $height);
+    openMediaEditor($page, $saved->social_account_id);
+    $page->assertMissing('@media-editor-error')->assertNoJavaScriptErrors()
+        ->screenshot(false, "blob-reloaded-{$suffix}");
 })->with(['desktop' => [1280, 900, 'desktop'], 'compact' => [390, 844, 'compact']]);

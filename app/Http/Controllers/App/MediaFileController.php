@@ -7,6 +7,8 @@ namespace App\Http\Controllers\App;
 use App\Enums\Media\Type as MediaType;
 use App\Http\Controllers\Controller;
 use App\Models\Media;
+use App\Support\Media\MediaUrl;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -19,6 +21,17 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 class MediaFileController extends Controller
 {
+    public function view(Request $request, Media $media): RedirectResponse
+    {
+        abort_unless($media->workspace !== null, 404);
+        abort_unless($request->user()->can('view', $media->workspace), 404);
+
+        return redirect()->away(MediaUrl::temporary($media->path))->withHeaders([
+            'Cache-Control' => 'private, no-store',
+            'Referrer-Policy' => 'no-referrer',
+        ]);
+    }
+
     public function show(Request $request, Media $media): StreamedResponse
     {
         $workspace = $request->user()->currentWorkspace;

@@ -7,6 +7,7 @@ namespace App\Services\Post;
 use App\Enums\SocialAccount\Platform;
 use App\Models\Post;
 use App\Services\Social\ContentSanitizer;
+use App\Support\Media\MediaUrl;
 use App\Support\ThreadReplies;
 use App\Support\YouTubeDescription;
 use App\Support\YouTubeMetadata;
@@ -86,7 +87,7 @@ class PostPreviewer
         if ($replies !== []) {
             $preview['thread_replies'] = array_map(fn (array $reply): array => [
                 'text' => $this->sanitizer->sanitize($reply['text'], $platform),
-                'media' => $reply['media'],
+                'media' => MediaUrl::apiItems($reply['media'], $post->workspace_id),
             ], $replies);
         }
 

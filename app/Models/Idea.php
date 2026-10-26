@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Casts\StoredMedia;
 use App\Dto\MediaItem;
 use Database\Factories\IdeaFactory;
 use Illuminate\Database\Eloquent\Builder;
@@ -40,7 +41,7 @@ class Idea extends Model
     protected function casts(): array
     {
         return [
-            'media' => 'array',
+            'media' => StoredMedia::class,
             'position' => 'integer',
         ];
     }

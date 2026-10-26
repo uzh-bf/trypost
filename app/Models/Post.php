@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Actions\Media\SyncOwnedMedia;
+use App\Casts\StoredMedia;
 use App\Dto\MediaItem;
 use App\Enums\Media\Type;
 use App\Enums\Post\CreatedVia;
@@ -19,6 +20,7 @@ use App\Enums\SocialAccount\Platform;
 use App\Enums\TikTok\PrivacyLevel;
 use App\Observers\PostObserver;
 use App\Support\Media\MediaCopyBatch;
+use App\Support\Media\MediaUrl;
 use Carbon\CarbonInterface;
 use Database\Factories\PostFactory;
 use Illuminate\Database\Eloquent\Attributes\ObservedBy;
@@ -33,7 +35,6 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 
 #[ObservedBy([PostObserver::class])]
 class Post extends Model
@@ -115,7 +116,7 @@ class Post extends Model
             'recurrence_origin_at' => 'datetime',
             'created_via' => CreatedVia::class,
             'origin' => Origin::class,
-            'media' => 'array',
+            'media' => StoredMedia::class,
             'scheduled_at' => 'datetime',
             'published_at' => 'datetime',
             'approval_requested_at' => 'datetime',
@@ -124,7 +125,7 @@ class Post extends Model
             'publish_status' => PublishStatus::class,
             'platform' => Platform::class,
             'content_type' => ContentType::class,
-            'meta' => 'array',
+            'meta' => StoredMedia::class,
             'error_context' => 'array',
             'thread_reply_ids' => 'array',
             'submitted_at' => 'datetime',
@@ -460,7 +461,7 @@ class Post extends Model
     {
         return Attribute::make(
             get: fn (): ?string => $this->socialAccount?->avatar_url
-                ?: ($this->platform_avatar ? Storage::url($this->platform_avatar) : null),
+                ?: MediaUrl::avatar($this->platform_avatar),
         );
     }
 

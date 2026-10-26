@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Resources\Api;
 
 use App\Models\Media;
+use App\Support\Media\MediaUrl;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -27,7 +28,7 @@ class UploadResource extends JsonResource
             'mime_type' => $this->mime_type,
             'size' => $this->size,
             'original_filename' => $this->original_filename,
-            'url' => $this->url,
+            'url' => MediaUrl::verifiesStorage() ? MediaUrl::temporary($this->path) : $this->url,
             'expires_at' => $this->created_at->copy()->addHours((int) config('trypost.media.upload_retention_hours'))->toIso8601String(),
         ];
     }

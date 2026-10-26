@@ -17,6 +17,7 @@ use App\Services\Social\InstagramPublisher;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 
 beforeEach(function () {
@@ -73,7 +74,25 @@ test('a still valid instagram feed image reaches the publisher', function () {
         ->and($this->account->platform)->toBe(Platform::Instagram);
 });
 
+test('missing owned attachments fail before a publisher can drop them', function (bool $inReply) {
+    config(['filesystems.verify_media' => true]);
+    Storage::delete($this->media->path);
+    if ($inReply) {
+        $this->post->update(['media' => [], 'meta' => ['thread_replies' => [[
+            'text' => 'fixture', 'media' => [MediaItem::fromMedia($this->media)->toArray()],
+        ]]]]);
+    }
+    $publisher = Mockery::mock(InstagramPublisher::class);
+    $publisher->shouldNotReceive('publish');
+    $this->app->instance(InstagramPublisher::class, $publisher);
+    (new PublishToSocialPlatform($this->post->fresh()))->handle();
+    expect($this->post->fresh()->publish_status)->toBe(PlatformStatus::Failed)
+        ->and(data_get($this->post->fresh()->error_context, 'reason'))->toBe('media_missing');
+})->with([false, true]);
+
 test('a resume of a publish the provider already accepted is not rechecked', function () {
+    config(['filesystems.verify_media' => true]);
+    Storage::delete($this->media->path);
     $this->media->update(['meta' => ['width' => 2000, 'height' => 1000]]);
     $this->post->update(['error_context' => [
         'category' => 'platform_unavailable',
@@ -101,3 +120,17 @@ test('a too-wide image fails the recheck even with a legacy aspect ratio', funct
 
     expect($this->post->fresh()->publish_status)->toBe(PlatformStatus::Failed);
 })->with(['1:1', '4:5', 'original']);
+
+test('a transient storage outage schedules a retry before any publisher call', function () {
+    config(['filesystems.verify_media' => true]);
+    Queue::fake();
+    Storage::shouldReceive('url')->andReturn('https://example.test/canonical');
+    Storage::shouldReceive('exists')->once()->andThrow(new RuntimeException('temporary storage failure'));
+    $publisher = Mockery::mock(InstagramPublisher::class);
+    $publisher->shouldNotReceive('publish');
+    $this->app->instance(InstagramPublisher::class, $publisher);
+    (new PublishToSocialPlatform($this->post->fresh()))->handle();
+    expect($this->post->fresh()->publish_status)->toBe(PlatformStatus::Retrying)
+        ->and(data_get($this->post->fresh()->error_context, 'reason'))->toBe('media_unavailable');
+    Queue::assertPushed(PublishToSocialPlatform::class);
+});

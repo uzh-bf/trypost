@@ -389,7 +389,7 @@ abstract class AbstractLinkedInPublisher
         }
 
         try {
-            $this->downloadToTempFile($mediaItem->url, $tempFile);
+            $this->downloadToTempFile($mediaItem->publishUrl(), $tempFile);
 
             return $this->uploadLocalImage($tempFile);
         } finally {
@@ -484,7 +484,7 @@ abstract class AbstractLinkedInPublisher
 
     private function doUploadVideo(string $tempFile, $mediaItem): ?string
     {
-        $this->downloadToTempFile($mediaItem->url, $tempFile);
+        $this->downloadToTempFile($mediaItem->publishUrl(), $tempFile);
 
         $fileSize = (int) filesize($tempFile);
 
@@ -599,7 +599,7 @@ abstract class AbstractLinkedInPublisher
         $tempFile = tempnam(sys_get_temp_dir(), 'li_document_');
 
         try {
-            $this->downloadToTempFile($mediaItem->url, $tempFile);
+            $this->downloadToTempFile($mediaItem->publishUrl(), $tempFile);
 
             $stream = fopen($tempFile, 'r');
 

@@ -34,6 +34,8 @@
     ],
     "require": {
         "php": "^8.2",
+        "azure-oss/identity": "1.0.4",
+        "azure-oss/storage-blob-flysystem": "2.2.2",
         "google/apiclient": "^2.19",
         "inertiajs/inertia-laravel": "^3.5.1",
         "intervention/image": "^4.0",

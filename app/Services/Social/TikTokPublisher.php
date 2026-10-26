@@ -16,6 +16,7 @@ use App\Models\Post;
 use App\Models\SocialAccount;
 use App\Services\Media\MediaOptimizer;
 use App\Services\Social\Concerns\HasSocialHttpClient;
+use App\Support\Media\MediaUrl;
 use App\Support\PostPlatformMetaRules;
 use App\Support\Social\PublishCheckpoint;
 use App\Support\Social\TikTokPhotoDerivativeCleaner;
@@ -229,7 +230,7 @@ class TikTokPublisher
                 'post_info' => $this->buildVideoPostInfo($post, $content, $media->coverOffsetMs()),
                 'source_info' => [
                     'source' => 'PULL_FROM_URL',
-                    'video_url' => $media->url,
+                    'video_url' => $media->publishUrl(),
                 ],
             ]);
 
@@ -333,7 +334,7 @@ class TikTokPublisher
         $width = $image->width();
 
         if ($maxWidth !== null && $width !== null && $width <= $maxWidth) {
-            return [$image->url, null];
+            return [$image->publishUrl(), null];
         }
 
         return $this->renderCompliantPhoto($image);
@@ -351,7 +352,7 @@ class TikTokPublisher
         $tempInput = tempnam(sys_get_temp_dir(), 'tiktok_photo_');
 
         try {
-            $download = Http::sink($tempInput)->timeout(120)->get($image->url);
+            $download = Http::sink($tempInput)->timeout(120)->get($image->publishUrl());
 
             if ($download->failed()) {
                 throw new TikTokPublishException(
@@ -385,7 +386,7 @@ class TikTokPublisher
                 @unlink($optimized);
             }
 
-            return [Storage::url($path), $path];
+            return [MediaUrl::publishing($path), $path];
         } catch (Throwable $e) {
             Log::error('TikTok photo resize/host failed', [
                 'exception' => $e->getMessage(),
