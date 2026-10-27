@@ -67,6 +67,30 @@ test('the agent is prompted exactly once per request', function () {
     expect($prompted)->toBe(1);
 });
 
+test('default idea styles do not require a configured guide', function (array $choice) {
+    config(['ai_writing.df_style_path' => '/missing/synthetic-guide.md']);
+    generateIdeaFake();
+
+    $this->actingAs($this->user)
+        ->postJson(route('app.create.ideas.generate'), generateIdeaPayload($choice))
+        ->assertOk();
+
+    IdeaGenerator::assertPrompted(fn (AgentPrompt $prompt): bool => $prompt->agent->writingStyleInstructions === null);
+})->with([[[]], [['style_id' => null]], [['style_id' => 'default']]]);
+
+test('invalid or unavailable idea styles fail before generation', function (mixed $style) {
+    config(['ai_writing.df_style_path' => '/missing/synthetic-guide.md']);
+    IdeaGenerator::fake();
+
+    $response = $this->actingAs($this->user)
+        ->postJson(route('app.create.ideas.generate'), generateIdeaPayload(['style_id' => $style]))
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('style_id');
+
+    expect($response->getContent())->not->toContain('/missing/synthetic-guide.md');
+    IdeaGenerator::assertNeverPrompted();
+})->with(['unknown', 'df', [['df']]]);
+
 test('a denied AI gate returns 402 and never calls the model', function () {
     IdeaGenerator::fake();
     Gate::before(fn (User $user, string $ability): ?AuthResponse => $ability === 'useAi'

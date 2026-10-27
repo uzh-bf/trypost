@@ -10,6 +10,7 @@ import { trans } from 'laravel-vue-i18n';
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 
 import AiModelSelect from '@/components/ai/AiModelSelect.vue';
+import AiWritingStyleSelect from '@/components/ai/AiWritingStyleSelect.vue';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -43,10 +44,12 @@ const http = useHttp<
         audience: string;
         notes: string;
         model_id: string | null;
+        style_id: string;
     },
     IdeaDraft
 >({
     model_id: page.props.aiModels?.default ?? null,
+    style_id: page.props.aiWritingStyles?.default ?? 'default',
     business: '',
     audience: '',
     notes: '',
@@ -62,6 +65,7 @@ watch(open, (isOpen) => {
 
     error.value = '';
     http.model_id = page.props.aiModels?.default ?? null;
+    http.style_id = page.props.aiWritingStyles?.default ?? 'default';
     idea.value = null;
     http.business = '';
     http.audience = '';
@@ -174,6 +178,12 @@ const useIdea = (): void => {
                 class="mx-6 my-3 sm:mx-0"
                 capability="structured"
                 test-id="ideas-generate-model"
+                :disabled="http.processing"
+            />
+            <AiWritingStyleSelect
+                v-model="http.style_id"
+                class="mx-6 my-3 sm:mx-0"
+                test-id="ideas-generate-style"
                 :disabled="http.processing"
             />
             <div

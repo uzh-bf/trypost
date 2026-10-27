@@ -22,6 +22,7 @@ class GenerateIdeaRequest extends FormRequest
     {
         return [
             'model_id' => ['nullable', 'string', 'max:64'],
+            'style_id' => ['nullable', 'string', 'max:64'],
             'business' => ['required', 'string', 'max:1000'],
             'audience' => ['required', 'string', 'max:1000'],
             'notes' => ['nullable', 'string', 'max:'.AiPromptRules::PROMPT_MAX_LENGTH],
