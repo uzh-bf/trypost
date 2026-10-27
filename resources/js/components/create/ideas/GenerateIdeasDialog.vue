@@ -35,7 +35,12 @@ const emit = defineEmits<{
 const page = usePage<AppPageProps>();
 const open = ref(false);
 const error = ref('');
-const idea = ref<IdeaDraft | null>(null);
+const idea = ref<{
+    draft: IdeaDraft;
+    modelId: string;
+    modelLabel: string;
+    styleId: string;
+} | null>(null);
 let requestId = 0;
 
 const http = useHttp<
@@ -96,6 +101,14 @@ const submit = async (): Promise<void> => {
     error.value = '';
     http.cancel();
     const currentRequest = ++requestId;
+    const modelId = http.model_id ?? page.props.aiModels?.default ?? 'legacy';
+    const generation = {
+        modelId,
+        modelLabel:
+            page.props.aiModels?.options.find((model) => model.id === modelId)
+                ?.label ?? 'AI',
+        styleId: http.style_id,
+    };
 
     try {
         const result = await http.post(generate.url());
@@ -112,7 +125,7 @@ const submit = async (): Promise<void> => {
             return;
         }
 
-        idea.value = result;
+        idea.value = { draft: result, ...generation };
     } catch (exception) {
         if (currentRequest !== requestId) {
             return;
@@ -129,7 +142,7 @@ const useIdea = (): void => {
         return;
     }
 
-    const chosen = idea.value;
+    const chosen = idea.value.draft;
     open.value = false;
     emit('use', chosen);
 };
@@ -201,14 +214,25 @@ const useIdea = (): void => {
                             class="font-semibold break-words"
                             data-testid="ideas-generate-result-title"
                         >
-                            {{ idea.title }}
+                            {{ idea.draft.title }}
                         </p>
                         <p
-                            v-if="idea.body"
+                            class="text-xs break-words text-muted-foreground"
+                            data-testid="ideas-generate-origin"
+                            :data-model-id="idea.modelId"
+                            :data-style-id="idea.styleId"
+                        >
+                            {{ $t('posts.composer.ai_model') }}:
+                            {{ idea.modelLabel }} ·
+                            {{ $t('posts.composer.ai_style') }}:
+                            {{ $t(`posts.composer.ai_style_${idea.styleId}`) }}
+                        </p>
+                        <p
+                            v-if="idea.draft.body"
                             class="text-sm break-words whitespace-pre-line text-muted-foreground"
                             data-testid="ideas-generate-result-body"
                         >
-                            {{ idea.body }}
+                            {{ idea.draft.body }}
                         </p>
                     </div>
 

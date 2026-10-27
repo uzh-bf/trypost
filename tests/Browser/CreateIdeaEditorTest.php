@@ -472,11 +472,15 @@ test('generate ideas keeps model and style selections together and opens the res
     [$user, $workspace] = createIdeaEditorSetup();
     $user->update(['locale' => $locale, 'name' => 'Style Review']);
     $workspace->update(['name' => 'Synthetic editorial review']);
-    IdeaGenerator::fake([
-        ['title' => 'Behind the kiln', 'body' => 'Show the firing process.'],
-        ['title' => 'Glaze of the week', 'body' => 'Feature one glaze.'],
-        ['title' => 'Another idea', 'body' => 'A fresh default brief.'],
-    ]);
+    $attempts = 0;
+    IdeaGenerator::fake(function () use (&$attempts): array {
+        return match (++$attempts) {
+            1 => ['title' => 'Behind the kiln', 'body' => 'Show the firing process.'],
+            2 => throw new ProviderOverloadedException('overloaded'),
+            3 => ['title' => 'Glaze of the week', 'body' => 'Feature one glaze.'],
+            default => ['title' => 'Another idea', 'body' => 'A fresh default brief.'],
+        };
+    });
     $this->actingAs($user);
 
     $page = visit(route('app.create.ideas.index'));
@@ -500,9 +504,11 @@ test('generate ideas keeps model and style selections together and opens the res
         ->click('@ideas-generate-submit');
     waitForCreateIdeaEditorTestId($page, 'ideas-generate-result', 'Behind the kiln');
 
-    $page->screenshot(false, "idea-style-generated-{$capture}");
+    $page->screenshot(false, "idea-origin-generated-{$capture}");
     $page->assertSeeIn('@ideas-generate-result', 'Behind the kiln')
-        ->assertSeeIn('@ideas-generate-result', 'Show the firing process.');
+        ->assertSeeIn('@ideas-generate-result', 'Show the firing process.')
+        ->assertAttribute('@ideas-generate-origin', 'data-model-id', 'opus')
+        ->assertAttribute('@ideas-generate-origin', 'data-style-id', 'df');
     expect($page->script(<<<'JS'
         (() => {
             const ids = ['ideas-generate-cancel', 'ideas-generate-again', 'ideas-generate-use'];
@@ -519,11 +525,24 @@ test('generate ideas keeps model and style selections together and opens the res
 
     $page->click('@ideas-generate-style')->click('@ideas-generate-style-default')
         ->click('@ideas-generate-model')->click('@ideas-generate-model-gemini')
+        ->assertAttribute('@ideas-generate-origin', 'data-model-id', 'opus')
+        ->assertAttribute('@ideas-generate-origin', 'data-style-id', 'df')
         ->click('@ideas-generate-again');
+    waitForCreateIdeaEditorTestId($page, 'ideas-generate-error');
+    $page->assertSeeIn('@ideas-generate-result', 'Behind the kiln')
+        ->assertAttribute('@ideas-generate-origin', 'data-model-id', 'opus')
+        ->assertAttribute('@ideas-generate-origin', 'data-style-id', 'df')
+        ->assertEnabled('@ideas-generate-use');
+    $page->screenshot(false, "idea-origin-retained-{$capture}");
+
+    $page->click('@ideas-generate-again');
     waitForCreateIdeaEditorTestId($page, 'ideas-generate-result', 'Glaze of the week');
 
     $page->assertSeeIn('@ideas-generate-result', 'Feature one glaze.')
-        ->assertDontSeeIn('@ideas-generate-result', 'Behind the kiln');
+        ->assertDontSeeIn('@ideas-generate-result', 'Behind the kiln')
+        ->assertAttribute('@ideas-generate-origin', 'data-model-id', 'gemini')
+        ->assertAttribute('@ideas-generate-origin', 'data-style-id', 'default');
+    $page->screenshot(false, "idea-origin-updated-{$capture}");
     IdeaGenerator::assertPrompted(fn ($prompt): bool => $prompt->model === 'test-gemini'
         && $prompt->agent->writingStyleInstructions === null
         && $prompt->agent->audience === 'Home decor lovers'
@@ -563,6 +582,7 @@ test('generate ideas keeps model and style selections together and opens the res
     $page->assertValue('@ideas-generate-audience', '')
         ->assertValue('@ideas-generate-business', '')
         ->assertMissing('@ideas-generate-result')
+        ->assertMissing('@ideas-generate-origin')
         ->assertDisabled('@ideas-generate-submit')
         ->fill('@ideas-generate-audience', 'Home decor lovers')
         ->fill('@ideas-generate-business', 'A handmade ceramics studio')
@@ -570,7 +590,9 @@ test('generate ideas keeps model and style selections together and opens the res
     waitForCreateIdeaEditorTestId($page, 'ideas-generate-result', 'Another idea');
     IdeaGenerator::assertPrompted(fn ($prompt): bool => $prompt->model === 'test-sol'
         && $prompt->agent->writingStyleInstructions === null);
-    $page->assertNoJavaScriptErrors();
+    $page->assertAttribute('@ideas-generate-origin', 'data-model-id', 'sol')
+        ->assertAttribute('@ideas-generate-origin', 'data-style-id', 'default')
+        ->assertNoJavaScriptErrors();
 })->with([
     'desktop en' => [[1280, 900], Locale::English],
     'compact de' => [[390, 844], Locale::German],
