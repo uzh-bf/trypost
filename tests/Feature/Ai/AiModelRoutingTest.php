@@ -150,19 +150,28 @@ test('legacy installations retain their configured single provider and model', f
         ->and(app(AiModelCatalog::class)->forFrontend()['default'])->toBe('legacy');
 });
 
-test('structured idea requests work on every selected native transport', function (string $id) {
+test('structured idea requests preserve the selected model and style on every native transport', function (string $id, string $style) {
+    $guide = 'Synthetic idea style marker & <literal>';
+    $path = tempnam(sys_get_temp_dir(), 'idea-style-');
+    file_put_contents($path, $guide);
+    $this->beforeApplicationDestroyed(fn () => unlink($path));
+    config(['ai_writing.df_style_path' => $path]);
     Http::fake(fn (Request $request) => Http::response(modelRoutingReply($request, json_encode(['title' => 'A title', 'body' => 'A useful idea']))));
     $this->actingAs($this->user)->postJson(route('app.create.ideas.generate'), [
-        'model_id' => $id, 'business' => 'A bakery', 'audience' => 'Neighbours',
+        'model_id' => $id, 'style_id' => $style, 'business' => 'A bakery', 'audience' => 'Neighbours',
     ])->assertOk()->assertJsonPath('title', 'A title')->assertJsonPath('body', 'A useful idea');
-    Http::assertSent(function (Request $request) use ($id): bool {
+    Http::assertSentCount(1);
+    Http::assertSent(function (Request $request) use ($id, $style, $guide): bool {
+        $serialized = json_encode($request->data(), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        expect(str_contains($serialized, $guide))->toBe($style === 'df');
         $format = $id === 'sol' ? $request['text']['format'] : $request['response_format']['json_schema'];
         expect($format['strict'])->toBeTrue()
+            ->and($request['model'])->toBe(config("ai_models.profiles.{$id}.model"))
             ->and($format['schema']['required'])->toContain('title', 'body');
 
         return true;
     });
-})->with(['sol', 'opus', 'gemini']);
+})->with(['sol', 'opus', 'gemini'])->with(['default', 'df']);
 
 test('invalid incomplete or empty structured ideas return a sanitized failure', function (string $id, string $text, string $finish) {
     $idea = Idea::factory()->create(['workspace_id' => $this->workspace->id]);

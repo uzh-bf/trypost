@@ -26,6 +26,7 @@ class IdeaGenerator implements Agent, HasProviderOptions, HasStructuredOutput
         public string $business,
         public string $audience,
         public ?string $notes = null,
+        public readonly ?string $writingStyleInstructions = null,
     ) {}
 
     public function instructions(): string
@@ -35,6 +36,7 @@ class IdeaGenerator implements Agent, HasProviderOptions, HasStructuredOutput
             'audience' => $this->audience,
             'notes' => $this->notes,
             'language' => $this->locale->promptLanguage(),
+            'writing_style_instructions' => $this->writingStyleInstructions,
         ])->render();
     }
 

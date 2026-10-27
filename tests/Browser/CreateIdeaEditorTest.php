@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Ai\Agents\IdeaGenerator;
 use App\Ai\Agents\PostWritingAssistant;
+use App\Enums\User\Locale;
 use App\Models\Idea;
 use App\Models\IdeaStage;
 use App\Models\Media;
@@ -453,22 +454,42 @@ test('create post closes the editor and opens the composer with the idea', funct
     expect(Idea::whereKey($idea->id)->exists())->toBeTrue();
 });
 
-test('generate ideas shows one idea, generates again and opens it unsaved in the new idea editor', function (?array $size) {
+test('generate ideas keeps model and style selections together and opens the result unsaved', function (array $size, Locale $locale) {
+    $guide = 'Synthetic idea browser style marker & <literal>';
+    $path = tempnam(sys_get_temp_dir(), 'idea-browser-style-');
+    file_put_contents($path, $guide);
+    $this->beforeApplicationDestroyed(fn () => unlink($path));
+    config([
+        'ai_writing.df_style_path' => $path,
+        'ai_models.default' => 'sol',
+        'ai_models.profiles.sol.model' => 'test-sol',
+        'ai_models.profiles.opus.model' => 'test-opus',
+        'ai_models.profiles.gemini.model' => 'test-gemini',
+        'ai.providers.litellm.key' => 'test-key',
+        'ai.providers.litellm.url' => 'https://litellm.test/v1',
+        'ai.providers.openrouter.key' => 'test-key',
+    ]);
     [$user, $workspace] = createIdeaEditorSetup();
+    $user->update(['locale' => $locale, 'name' => 'Style Review']);
+    $workspace->update(['name' => 'Synthetic editorial review']);
     IdeaGenerator::fake([
         ['title' => 'Behind the kiln', 'body' => 'Show the firing process.'],
         ['title' => 'Glaze of the week', 'body' => 'Feature one glaze.'],
+        ['title' => 'Another idea', 'body' => 'A fresh default brief.'],
     ]);
     $this->actingAs($user);
 
     $page = visit(route('app.create.ideas.index'));
-    if ($size !== null) {
-        $page->resize(...$size);
-    }
+    $page->resize(...$size);
     waitForCreateIdeaEditorTestId($page, 'ideas-generate');
     $page->click('@ideas-generate');
     waitForCreateIdeaEditorTestId($page, 'ideas-generate-dialog');
 
+    $capture = $locale === Locale::German ? 'compact-de' : 'desktop-en';
+    $page->click('@ideas-generate-style')->click('@ideas-generate-style-df')
+        ->click('@ideas-generate-model')->click('@ideas-generate-model-opus');
+
+    $page->screenshot(false, "idea-style-selected-{$capture}");
     $page->assertMissing('@ideas-generate-count')
         ->assertMissing('@ideas-generate-stage')
         ->assertDisabled('@ideas-generate-submit')
@@ -479,6 +500,7 @@ test('generate ideas shows one idea, generates again and opens it unsaved in the
         ->click('@ideas-generate-submit');
     waitForCreateIdeaEditorTestId($page, 'ideas-generate-result', 'Behind the kiln');
 
+    $page->screenshot(false, "idea-style-generated-{$capture}");
     $page->assertSeeIn('@ideas-generate-result', 'Behind the kiln')
         ->assertSeeIn('@ideas-generate-result', 'Show the firing process.');
     expect($page->script(<<<'JS'
@@ -492,12 +514,19 @@ test('generate ideas shows one idea, generates again and opens it unsaved in the
         })()
     JS))->toBeTrue();
 
-    $page->click('@ideas-generate-again');
+    IdeaGenerator::assertPrompted(fn ($prompt): bool => $prompt->model === 'test-opus'
+        && $prompt->agent->writingStyleInstructions === $guide);
+
+    $page->click('@ideas-generate-style')->click('@ideas-generate-style-default')
+        ->click('@ideas-generate-model')->click('@ideas-generate-model-gemini')
+        ->click('@ideas-generate-again');
     waitForCreateIdeaEditorTestId($page, 'ideas-generate-result', 'Glaze of the week');
 
     $page->assertSeeIn('@ideas-generate-result', 'Feature one glaze.')
         ->assertDontSeeIn('@ideas-generate-result', 'Behind the kiln');
-    IdeaGenerator::assertPrompted(fn ($prompt): bool => $prompt->agent->audience === 'Home decor lovers'
+    IdeaGenerator::assertPrompted(fn ($prompt): bool => $prompt->model === 'test-gemini'
+        && $prompt->agent->writingStyleInstructions === null
+        && $prompt->agent->audience === 'Home decor lovers'
         && $prompt->agent->business === 'A handmade ceramics studio');
 
     $page->click('@ideas-generate-use');
@@ -535,9 +564,16 @@ test('generate ideas shows one idea, generates again and opens it unsaved in the
         ->assertValue('@ideas-generate-business', '')
         ->assertMissing('@ideas-generate-result')
         ->assertDisabled('@ideas-generate-submit')
-        ->assertNoJavaScriptErrors();
+        ->fill('@ideas-generate-audience', 'Home decor lovers')
+        ->fill('@ideas-generate-business', 'A handmade ceramics studio')
+        ->click('@ideas-generate-submit');
+    waitForCreateIdeaEditorTestId($page, 'ideas-generate-result', 'Another idea');
+    IdeaGenerator::assertPrompted(fn ($prompt): bool => $prompt->model === 'test-sol'
+        && $prompt->agent->writingStyleInstructions === null);
+    $page->assertNoJavaScriptErrors();
 })->with([
-    'desktop' => [null],
+    'desktop en' => [[1280, 900], Locale::English],
+    'compact de' => [[390, 844], Locale::German],
 ]);
 
 test('generate ideas shows the payment required message inline when AI is denied', function () {

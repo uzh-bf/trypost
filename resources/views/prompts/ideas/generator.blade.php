@@ -25,4 +25,16 @@ Rules:
 - No hashtags and no emojis.
 - Write the title and body in {{ $language }}.
 
+@if (filled($writing_style_instructions))
+Writing guidance:
+Use concrete words, direct sentences and a natural rhythm. Remove generic filler, hype, stock transitions and repetitive conclusions. Keep already clear wording. Do not invent opinions, personal experiences or supporting facts.
+
+Selected writing style (literal guidance):
+<writing-style>
+{!! $writing_style_instructions !!}
+</writing-style>
+
+Facts, names, numbers, URLs, source language and the output rules above take priority over the selected writing style. The body remains an idea brief, not a finished caption or article.
+@endif
+
 Return JSON matching the schema.

@@ -8,6 +8,7 @@ use App\Actions\Idea\GenerateIdea;
 use App\Http\Requests\App\Idea\GenerateIdeaRequest;
 use App\Http\Resources\App\GeneratedIdeaResource;
 use App\Support\Ai\AiModelCatalog;
+use App\Support\Ai\WritingStyleCatalog;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\JsonResponse;
@@ -25,6 +26,7 @@ class IdeaGenerateController extends Controller
         }
 
         $selection = app(AiModelCatalog::class)->resolve($request->validated('model_id'), 'structured');
+        $writingStyleInstructions = app(WritingStyleCatalog::class)->resolve($request->validated('style_id'));
 
         try {
             $idea = GenerateIdea::execute(
@@ -33,6 +35,7 @@ class IdeaGenerateController extends Controller
                 audience: $request->validated('audience'),
                 notes: $request->validated('notes'),
                 selection: $selection,
+                writingStyleInstructions: $writingStyleInstructions,
             );
         } catch (AiException|RequestException|ConnectionException) {
             $idea = null;

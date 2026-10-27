@@ -16,9 +16,9 @@ class GenerateIdea
     /**
      * @return array{title: string, body: string}|null
      */
-    public static function execute(User $user, string $business, string $audience, ?string $notes, array $selection): ?array
+    public static function execute(User $user, string $business, string $audience, ?string $notes, array $selection, ?string $writingStyleInstructions = null): ?array
     {
-        $response = (new IdeaGenerator($user->locale, $business, $audience, $notes))
+        $response = (new IdeaGenerator($user->locale, $business, $audience, $notes, $writingStyleInstructions))
             ->withModelSelection($selection)
             ->prompt('Suggest one content idea.', provider: $selection['provider'], model: $selection['model']);
 
