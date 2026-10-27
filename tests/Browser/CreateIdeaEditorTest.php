@@ -480,9 +480,7 @@ test('generate ideas keeps model and style selections together and opens the res
     $this->actingAs($user);
 
     $page = visit(route('app.create.ideas.index'));
-    if ($size !== null) {
-        $page->resize(...$size);
-    }
+    $page->resize(...$size);
     waitForCreateIdeaEditorTestId($page, 'ideas-generate');
     $page->click('@ideas-generate');
     waitForCreateIdeaEditorTestId($page, 'ideas-generate-dialog');
