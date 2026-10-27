@@ -36,4 +36,8 @@ Failure recovery is a source correction within this branch. A missing capability
 
 ## Progress
 
-The implementation is present. Focused backend verification passed: 108 tests. Asset build, touched frontend lint and full TypeScript check passed. Browser verification, focused scan, committed-range reviews and hosted CI remain in progress. Added tests extend existing seams; no new test file or production test hook was added. The source batch remains unmerged and undeployed.
+Source complete. Focused backend verification passed: 108 tests. Asset build, touched frontend formatting/lint and full TypeScript check passed. The English desktop and German compact Ideas browser cases passed, including model/style pairing, switching to Default, save and reopening/reset. Test delta: added two parameterized feature tests; extended the existing transport matrix and browser flow; removed none.
+
+The committed slice received independent simplification and risk reviews: no useful reductions or verified findings. The final browser fixture correction supplies the synthetic Sol endpoint required by the existing model catalog. No application correction was needed. The focused scanner reported no rule findings; its parser cannot read the new readonly-promoted parameter. A scan-only copy omitting that modifier parsed without errors and found no issues; native PHP checks and direct source review cover the actual syntax.
+
+First useful acceptance is achieved. Remaining source-delivery work is the existing assistant browser regression, integrated Opus review, hosted CI, inspected screenshot attachments and draft PR. Merge and deployment remain separate. The local runtime is task-owned and will stop after its final check.

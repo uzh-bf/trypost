@@ -466,6 +466,7 @@ test('generate ideas keeps model and style selections together and opens the res
         'ai_models.profiles.opus.model' => 'test-opus',
         'ai_models.profiles.gemini.model' => 'test-gemini',
         'ai.providers.litellm.key' => 'test-key',
+        'ai.providers.litellm.url' => 'https://litellm.test/v1',
         'ai.providers.openrouter.key' => 'test-key',
     ]);
     [$user, $workspace] = createIdeaEditorSetup();
