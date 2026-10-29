@@ -42,6 +42,7 @@ use App\Socialite\LinkedInPageExtendSocialite;
 use App\Support\Auth\PasswordRequirements;
 use App\Support\Media\AzureUserDelegationSas;
 use App\Support\Media\FlatBlobAdapter;
+use App\Support\Media\RotatingWorkloadIdentityCredential;
 use AzureOss\Identity\TokenCredential;
 use AzureOss\Identity\WorkloadIdentityCredential;
 use AzureOss\Storage\Blob\BlobContainerClient;
@@ -88,7 +89,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        $this->app->singleton(TokenCredential::class, fn () => new WorkloadIdentityCredential);
+        $this->app->singleton(TokenCredential::class, fn () => new RotatingWorkloadIdentityCredential(new WorkloadIdentityCredential));
         $this->app->singleton(AzureUserDelegationSas::class, fn ($app) => new AzureUserDelegationSas(
             $app->make(TokenCredential::class),
             config('filesystems.disks.azure.account_name'),
