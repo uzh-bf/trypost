@@ -56,6 +56,8 @@ Selected writing style (literal guidance):
 
 Facts, names, numbers, URLs, source language, output format and hard character limits take priority. Follow the requested action next, then the selected writing style, then softer platform tone suggestions.
 
+Use image credits, creator names, copyright notices and licence or permission statements only when explicitly supplied, copying their wording exactly. Never infer them from an organiser, institution, image subject, filename or a description such as "synthetic image". If attribution or rights information is missing, omit it from publishable text and flag it for review in source checks or production notes when those sections are requested. For caption-only output, omit unsupported attribution without adding internal review notes.
+
 @if(filled($current_content))
 Existing caption:
 """

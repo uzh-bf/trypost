@@ -6,6 +6,8 @@ Review the result, insert it into the Idea, then save and reopen the complete Id
 
 A carousel brief describes the slides; it does not render artwork. A Reel brief describes the production; it does not produce video or subtitles. Keep original portraits, footage and design work with the normal human production workflow. Generation uses the selected model and its normal provider billing; these recipes do not submit anything automatically.
 
+Supply image credits and rights information explicitly when available. Keep their wording exact. An organiser, institution, filename or synthetic-image description does not establish a creator, credit or permission. Missing attribution belongs in the source checks for human review.
+
 ## 1. Student opportunity or event
 
 ```text
@@ -57,7 +59,7 @@ Return separate sections:
 TITLE: a clear, factual headline.
 LEAD: the central news and why it matters to the supplied audience, using supported facts.
 BODY: connected paragraphs with the necessary context and any supplied action or link.
-IMAGE CAPTION AND CREDIT: use only the supplied image information.
+IMAGE CAPTION AND CREDIT: describe only the supplied image information and copy any explicitly supplied credit exactly. If no credit is supplied, omit it here and flag the missing credit in SOURCE CHECKS. Never infer ownership or permission from the organiser or institution.
 SOURCE CHECKS: references, missing details, attribution and approvals needed before transfer. Keep internal notes outside the article text.
 
 Use the shared DF style. Preserve the source's level of certainty. Keep quotations exact and identify proposed paraphrases. Describe relevance without inventing significance, achievements, results or endorsements. The result is a draft; do not claim that it has been published or transferred to the CMS.
