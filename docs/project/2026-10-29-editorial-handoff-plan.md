@@ -46,10 +46,13 @@ Use the repository's installed npm/Composer tooling and lockfiles, inside a loca
 
 ## Progress
 
-- Root outcome: selected captions can become post drafts without copying production notes; three reusable recipes support consistent editorial preparation.
+- Root outcome: selected captions can become post drafts without copying production notes; three copyable recipes support editorial preparation.
 - Approved batch and terminal: user-agreed source implementation through reviewed draft PR/CI, without release/live effects.
-- First useful acceptance: synthetic selected caption opens composer with expected media/labels and leaves the full source Idea intact.
-- State: planning; initial Astra critique received. Accepted all three findings: resolve the unbound generation prompt conflict, require saved/reopened source for preservation, and specify blur/stale-selection behavior. One focused revised Astra critique approved the corrected plan. No implementation edits or active writer other than main.
-- Evidence: existing Create post browser test and source createPost function; previous synthetic workflow identified full-body transfer. No real-environment findings are included in tracked deliverables.
-- Current blocker: none. Local dependencies are being prepared in the container; implementation follows this approved plan commit.
-- Package tier: full path; one coherent enhancement. Substantive size: not yet applicable.
+- First useful acceptance: achieved. Synthetic carousel and Reel captions open the composer with the expected image and label while the exact saved source body, title and media owner remain intact.
+- State: source complete, final independent review and hosted CI pending. Main remains the sole writer. One revised Astra plan critique approved the bounded prompt correction and selection/source-preservation contract.
+- Verification: 150 focused AI/localization tests passed with one existing skip. Five focused browser cases passed; the two capture cases were then strengthened to require actual image loading and passed again. Pointer desktop English and keyboard compact German captures were inspected. Touched ESLint, Vue TypeScript, Pint and asset build passed. Prompt render inspection covers unbound generate/regenerate, bound generation and rewrite. No paid provider call or model-writing-quality proof is claimed.
+- Focused scanner: all three code targets parsed. A warning points to existing test-owned temporary-file cleanup, outside the changed behavior; source inspection rejects it as a new vulnerability. The final test-fixture adjustment is subject to the same focused scan and review.
+- Formatting: the installed formatter was run; unrelated pre-existing reflows were restored to keep the semantic diff focused. The repository's linter workflow formats in place.
+- Working context: isolated native Docker test services, source bind-mount and read-only Git metadata. No DevPod/devrouter runtime was used. Stop the exact task services after the last runtime-dependent check and preserve the worktree.
+- Current blocker: none. Final review, screenshot publication and hosted checks remain before the source-delivery terminal.
+- Package tier: full path; one coherent enhancement. Substantive size is recorded in the ignored delivery receipt against the source target, excluding project artifacts.

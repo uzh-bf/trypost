@@ -51,6 +51,8 @@ return [
             'body_placeholder' => 'すべてはアイデアから始まります…',
             'use_assistant' => 'AIアシスタントを使う',
             'create_post' => '投稿を作成',
+            'create_post_selection' => '選択範囲を使用',
+            'selection_help' => 'このアイデアの一部だけを投稿に使うには、投稿を作成する前にテキストを選択してください。',
             'save' => 'アイデアを保存',
             'stage' => 'グループ',
             'labels' => 'ラベル',

@@ -51,6 +51,8 @@ return [
             'body_placeholder' => 'Tudo começa com uma ideia…',
             'use_assistant' => 'Usar o assistente de IA',
             'create_post' => 'Criar post',
+            'create_post_selection' => 'Usar seleção',
+            'selection_help' => 'Para usar apenas parte desta ideia em um post, selecione o texto antes de criá-lo.',
             'save' => 'Salvar ideia',
             'stage' => 'Grupo',
             'labels' => 'Etiquetas',

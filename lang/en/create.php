@@ -51,6 +51,8 @@ return [
             'body_placeholder' => 'It all starts with an idea…',
             'use_assistant' => 'Use the AI assistant',
             'create_post' => 'Create post',
+            'create_post_selection' => 'Use selection',
+            'selection_help' => 'To use only part of this idea in a post, select its text before creating the post.',
             'save' => 'Save idea',
             'stage' => 'Group',
             'labels' => 'Labels',

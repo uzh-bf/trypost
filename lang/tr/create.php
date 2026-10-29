@@ -51,6 +51,8 @@ return [
             'body_placeholder' => 'Her şey bir fikirle başlar…',
             'use_assistant' => 'Yapay zeka asistanını kullan',
             'create_post' => 'Gönderi oluştur',
+            'create_post_selection' => 'Seçimi kullan',
+            'selection_help' => 'Gönderide bu fikrin yalnızca bir bölümünü kullanmak için gönderiyi oluşturmadan önce metni seçin.',
             'save' => 'Fikri kaydet',
             'stage' => 'Grup',
             'labels' => 'Etiketler',

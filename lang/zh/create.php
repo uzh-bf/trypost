@@ -51,6 +51,8 @@ return [
             'body_placeholder' => '一切都从一个想法开始…',
             'use_assistant' => '使用 AI 助手',
             'create_post' => '创建帖子',
+            'create_post_selection' => '使用选中内容',
+            'selection_help' => '如需仅将此创意的部分内容用于帖子，请先选中文字，再创建帖子。',
             'save' => '保存想法',
             'stage' => '分组',
             'labels' => '标签',

@@ -51,6 +51,8 @@ return [
             'body_placeholder' => 'Alles beginnt mit einer Idee…',
             'use_assistant' => 'KI-Assistenten verwenden',
             'create_post' => 'Beitrag erstellen',
+            'create_post_selection' => 'Auswahl nutzen',
+            'selection_help' => 'Um nur einen Teil dieser Idee für einen Beitrag zu verwenden, markiere den Text vor dem Erstellen.',
             'save' => 'Idee speichern',
             'stage' => 'Gruppe',
             'labels' => 'Labels',
