@@ -184,6 +184,22 @@ const stageOpen = ref(false);
 const stageSearch = ref('');
 const emojiOpen = ref(false);
 const body = ref<HTMLTextAreaElement | null>(null);
+const selectedText = ref('');
+
+const captureSelection = (): void => {
+    const element = body.value;
+    selectedText.value = element
+        ? element.value
+              .slice(element.selectionStart, element.selectionEnd)
+              .trim()
+        : '';
+};
+
+const clearSelection = (): void => {
+    selectedText.value = '';
+};
+
+watch(() => form.body, clearSelection);
 
 const isEmpty = computed(
     () =>
@@ -318,7 +334,8 @@ const createPost = (): void => {
     }
 
     const draft = {
-        content: form.body.trim() ? form.body : form.title,
+        content:
+            selectedText.value || (form.body.trim() ? form.body : form.title),
         media: [...media.value],
         scheduled_at: null,
         label_ids: [...form.label_ids],
@@ -568,6 +585,9 @@ const iconButtonClass =
                                 $t('create.ideas.editor.body_placeholder')
                             "
                             class="min-h-40 w-full flex-1 resize-none bg-transparent py-1 text-sm outline-none"
+                            @select="captureSelection"
+                            @keyup="captureSelection"
+                            @pointerup="captureSelection"
                         />
                         <div
                             v-if="!form.body"
@@ -588,6 +608,10 @@ const iconButtonClass =
                             </button>
                         </div>
                     </div>
+
+                    <p class="mt-2 text-xs text-muted-foreground">
+                        {{ $t('create.ideas.editor.selection_help') }}
+                    </p>
 
                     <MediaTray
                         v-model:items="media"
@@ -692,11 +716,21 @@ const iconButtonClass =
                     <Button
                         type="button"
                         variant="outline"
-                        data-testid="idea-editor-create-post"
+                        :data-testid="
+                            selectedText
+                                ? 'idea-editor-create-selected-post'
+                                : 'idea-editor-create-post'
+                        "
                         :disabled="isEmpty || mediaBlocked"
                         @click="createPost"
                     >
-                        {{ $t('create.ideas.editor.create_post') }}
+                        {{
+                            $t(
+                                selectedText
+                                    ? 'create.ideas.editor.create_post_selection'
+                                    : 'create.ideas.editor.create_post',
+                            )
+                        }}
                     </Button>
                     <Button
                         type="button"

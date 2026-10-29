@@ -51,6 +51,8 @@ return [
             'body_placeholder' => 'Alles begint met een idee…',
             'use_assistant' => 'AI-assistent gebruiken',
             'create_post' => 'Bericht maken',
+            'create_post_selection' => 'Selectie gebruiken',
+            'selection_help' => 'Selecteer de tekst voordat je het bericht maakt om slechts een deel van dit idee te gebruiken.',
             'save' => 'Idee opslaan',
             'stage' => 'Groep',
             'labels' => 'Labels',

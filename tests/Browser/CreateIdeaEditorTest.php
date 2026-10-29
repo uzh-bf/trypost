@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Actions\Media\SyncOwnedMedia;
 use App\Ai\Agents\IdeaGenerator;
 use App\Ai\Agents\PostWritingAssistant;
 use App\Enums\User\Locale;
@@ -11,8 +12,11 @@ use App\Models\Media;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceLabel;
+use App\Support\Media\MediaCopyBatch;
 use Illuminate\Auth\Access\Response as AuthResponse;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Ai\Exceptions\ProviderOverloadedException;
 
 function waitForCreateIdeaEditorTestId(mixed $page, string $testId, string $text = ''): void
@@ -94,6 +98,21 @@ function createIdeaEditorIdea(Workspace $workspace, User $user, array $attribute
         'position' => 0,
         ...$attributes,
     ]);
+}
+
+function selectCreateIdeaEditorText(mixed $page, string $text): void
+{
+    $selected = json_encode($text);
+    $page->script(<<<JS
+        (() => {
+            const element = document.querySelector('[data-testid="idea-editor-body"]');
+            const text = {$selected};
+            const start = element.value.indexOf(text);
+            element.focus();
+            element.setSelectionRange(start, start + text.length);
+        })();
+    JS);
+    waitForCreateIdeaEditorTestId($page, 'idea-editor-create-selected-post');
 }
 
 test('a label created from the idea editor is selected and saved with the idea', function () {
@@ -412,7 +431,9 @@ test('the AI assistant rewrites and extends the body without a channel', functio
     $page = visit(route('app.create.ideas.create'));
     waitForCreateIdeaEditorDialog($page);
     $page->fill('@idea-editor-body', 'Rough text')
-        ->click('@idea-editor-ai');
+        ->assertVisible('@idea-editor-create-post');
+    selectCreateIdeaEditorText($page, 'Rough');
+    $page->click('@idea-editor-ai');
     waitForCreateIdeaEditorTestId($page, 'writing-assistant-panel');
 
     $page->assertMissing('@writing-assistant-channel')
@@ -420,10 +441,13 @@ test('the AI assistant rewrites and extends the body without a channel', functio
         ->click('@writing-assistant-mode-rephrase');
     waitForCreateIdeaEditorTestId($page, 'writing-assistant-replace');
     $page->click('@writing-assistant-replace')
-        ->assertValue('@idea-editor-body', 'Sharper text');
+        ->assertValue('@idea-editor-body', 'Sharper text')
+        ->assertVisible('@idea-editor-create-post')
+        ->assertMissing('@idea-editor-create-selected-post');
 
     PostWritingAssistant::fake(['New angle']);
 
+    selectCreateIdeaEditorText($page, 'Sharper');
     $page->click('@writing-assistant-mode-generate');
     waitForCreateIdeaEditorTestId($page, 'writing-assistant-prompt');
     $page->fill('@writing-assistant-prompt', 'ideas for our spring sale')
@@ -431,6 +455,8 @@ test('the AI assistant rewrites and extends the body without a channel', functio
     waitForCreateIdeaEditorTestId($page, 'writing-assistant-insert');
     $page->click('@writing-assistant-insert')
         ->assertValue('@idea-editor-body', "Sharper text\n\nNew angle")
+        ->assertVisible('@idea-editor-create-post')
+        ->assertMissing('@idea-editor-create-selected-post')
         ->assertNoJavaScriptErrors();
 });
 
@@ -452,6 +478,92 @@ test('create post closes the editor and opens the composer with the idea', funct
         ->assertMissing('@idea-editor')
         ->assertNoJavaScriptErrors();
     expect(Idea::whereKey($idea->id)->exists())->toBeTrue();
+});
+
+test('selected caption opens a post while the saved production brief and media remain intact', function (array $size, Locale $locale, string $format, bool $keyboard) {
+    [$user, $workspace] = createIdeaEditorSetup();
+    $user->update(['locale' => $locale, 'name' => 'Editorial Test']);
+    $workspace->update(['name' => 'Synthetic editorial review']);
+    $caption = "Synthetic {$format} caption 👋\nUnpublished test only.";
+    $body = "PRODUCTION NOTES\nPrepare the {$format} assets.\n\n{$caption}\n\nSOURCE CHECKS\nFictional test brief.";
+    $idea = createIdeaEditorIdea($workspace, $user, ['title' => "Synthetic {$format} brief", 'body' => $body]);
+    $label = WorkspaceLabel::factory()->create(['workspace_id' => $workspace->id, 'name' => 'Test series']);
+    $idea->labels()->attach($label->id);
+    $fixtureRoot = 'editorial-fixtures/'.$idea->id;
+    config([
+        'filesystems.default' => 'public',
+        'filesystems.disks.public.root' => public_path($fixtureRoot),
+        'filesystems.disks.public.url' => '/'.$fixtureRoot,
+    ]);
+    $this->beforeApplicationDestroyed(fn () => File::deleteDirectory(public_path($fixtureRoot)));
+    $media = Media::factory()->ownedByIdea($idea)->create(['original_filename' => 'synthetic-art.png', 'mime_type' => 'image/png']);
+    Storage::put($media->path, file_get_contents(base_path('tests/fixtures/crop-quadrants.png')));
+    MediaCopyBatch::run(fn (MediaCopyBatch $batch) => SyncOwnedMedia::execute($idea, [['id' => $media->id]], $batch));
+    $this->actingAs($user);
+
+    $page = visit(route('app.create.ideas.show', $idea))->resize(...$size);
+    waitForCreateIdeaEditorDialog($page);
+    waitForCreateIdeaEditorCondition($page, "[...document.querySelectorAll('[data-testid=\"idea-media-tray\"] img')].some((image) => image.complete && image.naturalWidth > 0)");
+    $page->assertScript("document.querySelector('[data-testid=\"idea-media-tray\"] img').naturalWidth > 0", true);
+    selectCreateIdeaEditorText($page, $caption);
+    $page->screenshot(filename: "selected-caption-{$format}");
+
+    if ($keyboard) {
+        $page->keys('@idea-editor-body', 'Tab')
+            ->assertVisible('@idea-editor-create-selected-post')
+            ->keys('@idea-editor-create-selected-post', 'Enter');
+    } else {
+        $page->click('@idea-editor-create-selected-post');
+    }
+    waitForCreateIdeaEditorTestId($page, 'composer-base-content', $caption);
+    waitForCreateIdeaEditorCondition($page, "[...document.querySelectorAll('[data-testid=\"composer-media-tray\"] img')].some((image) => image.complete && image.naturalWidth > 0)");
+
+    $page->assertValue('@composer-base-content', $caption)
+        ->assertScript("document.querySelector('[data-testid=\"composer-media-tray\"] img').naturalWidth > 0", true)
+        ->assertSeeIn('@composer-tags-trigger', $label->name)
+        ->assertMissing('@idea-editor')
+        ->assertNoJavaScriptErrors()
+        ->screenshot(filename: "selected-caption-{$format}-composer");
+    expect($idea->fresh()->body)->toBe($body)
+        ->and($idea->fresh()->title)->toBe("Synthetic {$format} brief")
+        ->and($idea->fresh()->ownedMedia()->sole()->id)->toBe($media->id)
+        ->and($media->fresh()->idea_id)->toBe($idea->id);
+    Storage::assertExists($media->path);
+})->with([
+    'desktop carousel pointer' => [[1440, 1000], Locale::English, 'carousel', false],
+    'compact reel keyboard' => [[390, 844], Locale::German, 'reel', true],
+]);
+
+test('editing or collapsing a caption selection restores the complete idea handoff', function () {
+    [$user, $workspace] = createIdeaEditorSetup();
+    $body = "Internal notes\n\nCaption text\n\n   \nReview notes";
+    $idea = createIdeaEditorIdea($workspace, $user, ['body' => $body]);
+    $this->actingAs($user);
+    $page = visit(route('app.create.ideas.show', $idea));
+    waitForCreateIdeaEditorDialog($page);
+
+    selectCreateIdeaEditorText($page, 'Caption text');
+    $page->keys('@idea-editor-body', 'ArrowRight');
+    waitForCreateIdeaEditorTestId($page, 'idea-editor-create-post');
+    selectCreateIdeaEditorText($page, 'Caption text');
+    $page->script(<<<'JS'
+        (() => {
+            const element = document.querySelector('[data-testid="idea-editor-body"]');
+            const start = element.value.indexOf('   ');
+            element.setSelectionRange(start, start + 3);
+        })();
+    JS);
+    waitForCreateIdeaEditorTestId($page, 'idea-editor-create-post');
+    selectCreateIdeaEditorText($page, 'Caption text');
+    $updated = "Updated internal notes\nNew caption\nUnpublished test";
+    $page->fill('@idea-editor-body', $updated);
+    waitForCreateIdeaEditorTestId($page, 'idea-editor-create-post');
+    $page->click('@idea-editor-create-post');
+    waitForCreateIdeaEditorTestId($page, 'composer-base-content', $updated);
+
+    $page->assertValue('@composer-base-content', $updated)
+        ->assertNoJavaScriptErrors();
+    expect($idea->fresh()->body)->toBe($body);
 });
 
 test('generate ideas keeps model and style selections together and opens the result unsaved', function (array $size, Locale $locale) {

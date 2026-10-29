@@ -51,6 +51,8 @@ return [
             'body_placeholder' => 'Wszystko zaczyna się od pomysłu…',
             'use_assistant' => 'Użyj asystenta AI',
             'create_post' => 'Utwórz post',
+            'create_post_selection' => 'Użyj zaznaczenia',
+            'selection_help' => 'Aby użyć w poście tylko części pomysłu, zaznacz tekst przed utworzeniem posta.',
             'save' => 'Zapisz pomysł',
             'stage' => 'Grupa',
             'labels' => 'Etykiety',

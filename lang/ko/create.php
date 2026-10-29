@@ -51,6 +51,8 @@ return [
             'body_placeholder' => '모든 것은 아이디어에서 시작됩니다…',
             'use_assistant' => 'AI 어시스턴트 사용',
             'create_post' => '게시물 만들기',
+            'create_post_selection' => '선택 영역 사용',
+            'selection_help' => '아이디어의 일부만 게시물에 사용하려면 게시물을 만들기 전에 해당 텍스트를 선택하세요.',
             'save' => '아이디어 저장',
             'stage' => '그룹',
             'labels' => '라벨',
