@@ -208,9 +208,9 @@ return [
     | Analytics publication discovery
     |--------------------------------------------------------------------------
     |
-    | Set `publication_history_enabled` to false to keep metric collection
-    | for known publications without calling provider publication-history or
-    | external-publication discovery APIs.
+    | Disable global publication history to keep collecting metrics on known
+    | publications. Set publication_history_account_id to the UUID of a
+    | connected channel to continue publication discovery for it alone.
     |
     | Discovery looks for new posts on every channel every
     | `discovery_interval_hours` (X separately, since X bills each read), and
