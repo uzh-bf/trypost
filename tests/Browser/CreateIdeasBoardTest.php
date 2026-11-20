@@ -852,21 +852,21 @@ test('AI model choice follows idea generation and resets when reopened', functio
     IdeaGenerator::fake([['title' => 'A synthetic idea', 'body' => 'An editable example for the test workspace.']]);
     $this->actingAs($user);
     $page = visit(route('app.create.ideas.index'))->resize($width, $height);
-    waitForCreateIdeasBoardTestId($page, 'ideas-generate');
+    waitFor($page, '@ideas-generate');
     $page->click('@ideas-generate');
-    waitForCreateIdeasBoardTestId($page, 'ideas-generate-model');
+    waitFor($page, '@ideas-generate-model');
     $page->click('@ideas-generate-model')->click('@ideas-generate-model-gemini')
         ->fill('@ideas-generate-business', 'Synthetic bakery')
         ->fill('@ideas-generate-audience', 'Example neighbours')
         ->screenshot(false, "ai-models-ideas-selected-{$suffix}")
         ->click('@ideas-generate-submit');
-    waitForCreateIdeasBoardTestId($page, 'ideas-generate-result');
+    waitFor($page, '@ideas-generate-result');
     $page->screenshot(false, "ai-models-ideas-result-{$suffix}");
     IdeaGenerator::assertPrompted(fn (AgentPrompt $prompt): bool => $prompt->model === 'test-gemini');
     $page->click('@ideas-generate-cancel');
-    waitForCreateIdeasBoardCondition($page, "!document.querySelector('[data-testid=\"ideas-generate-dialog\"]')");
+    waitForGone($page, '@ideas-generate-dialog');
     $page->click('@ideas-generate');
-    waitForCreateIdeasBoardTestId($page, 'ideas-generate-model');
+    waitFor($page, '@ideas-generate-model');
     $page->click('@ideas-generate-model')->assertAttribute('@ideas-generate-model-sol', 'data-state', 'checked')->assertNoJavaScriptErrors();
     Http::assertNotSent(fn ($request): bool => str_contains($request->url(), 'gateway.example.test') || str_contains($request->url(), 'openrouter.ai'));
 })->with(['desktop' => [1280, 900, 'desktop'], 'compact' => [390, 844, 'compact-de']]);

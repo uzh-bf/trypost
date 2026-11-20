@@ -344,11 +344,11 @@ test('AI model and style choices follow caption actions and failures preserve th
     });
     $this->actingAs($user);
     $page = visit(route('app.posts.create'))->resize($width, $height);
-    waitForComposerTemplatesDialog($page, 'post-composer-dialog');
+    waitForOpen($page, '@post-composer-dialog');
     $page->click('@composer-add-account')->click("@composer-account-option-{$account->id}")
         ->click('@composer-add-account');
     $page->fill("@composer-caption-{$account->id}", 'Original draft.')->click('@composer-ai-assistant');
-    waitForComposerTemplatesTestId($page, 'writing-assistant-model');
+    waitFor($page, '@writing-assistant-model');
     $page->assertAttribute('@writing-assistant-model', 'data-state', 'closed')
         ->screenshot(false, "ai-styles-caption-default-{$suffix}")
         ->click('@writing-assistant-style')
@@ -372,23 +372,23 @@ test('AI model and style choices follow caption actions and failures preserve th
     $page->click('@writing-assistant-generate')->assertDisabled('@writing-assistant-model')->assertDisabled('@writing-assistant-style')
         ->assertDisabled('@writing-assistant-generate')
         ->screenshot(false, "ai-styles-caption-busy-{$suffix}");
-    waitForComposerTemplatesTestId($page, 'writing-assistant-insert');
+    waitFor($page, '@writing-assistant-insert');
     $page->screenshot(false, "ai-styles-caption-result-{$suffix}")
         ->click('@writing-assistant-model')->click('@writing-assistant-model-sol')
         ->click('@writing-assistant-regenerate');
-    waitForComposerTemplatesCondition($page, "!document.querySelector('[data-testid=\"writing-assistant-regenerate\"]')?.disabled");
+    waitForState($page, '@writing-assistant-regenerate', '!element.disabled');
     $page->click('@writing-assistant-insert');
     $page->assertValue("@composer-caption-{$account->id}", "Original draft.\n\nA regenerated suggestion.");
     $page->click('@composer-ai-assistant');
-    waitForComposerTemplatesTestId($page, 'writing-assistant-mode-rephrase');
+    waitFor($page, '@writing-assistant-mode-rephrase');
     $page->click('@writing-assistant-style')->click('@writing-assistant-style-df')
         ->click('@writing-assistant-mode-rephrase');
-    waitForComposerTemplatesTestId($page, 'writing-assistant-error');
+    waitFor($page, '@writing-assistant-error');
     $page->assertValue("@composer-caption-{$account->id}", "Original draft.\n\nA regenerated suggestion.")
         ->screenshot(false, "ai-styles-caption-error-{$suffix}");
     $page->click('@writing-assistant-style')->click('@writing-assistant-style-default')
         ->click('@writing-assistant-mode-rephrase');
-    waitForComposerTemplatesTestId($page, 'writing-assistant-replace');
+    waitFor($page, '@writing-assistant-replace');
     $page->click('@writing-assistant-replace');
     if ($width < 1024) {
         $page->click('@composer-assistant-sheet-close');
@@ -399,14 +399,14 @@ test('AI model and style choices follow caption actions and failures preserve th
     PostWritingAssistant::assertPrompted(fn (AgentPrompt $prompt): bool => $prompt->model === 'test-sol' && $prompt->agent->mode->value === 'regenerate' && $prompt->agent->writingStyleInstructions === $guide);
     PostWritingAssistant::assertPrompted(fn (AgentPrompt $prompt): bool => $prompt->model === 'test-sol' && $prompt->agent->mode->value === 'rephrase' && $prompt->agent->writingStyleInstructions === null);
     $page->click('@composer-save-draft');
-    waitForComposerTemplatesDatabase($page, fn (): bool => Post::where('user_id', $user->id)->exists());
+    waitForDatabase($page, fn (): bool => Post::where('user_id', $user->id)->exists());
     $post = Post::where('user_id', $user->id)->sole();
     expect(strip_tags($post->content))->toBe('A replacement suggestion.');
     $reopened = visit(route('app.posts.edit', $post))->resize($width, $height);
-    waitForComposerTemplatesTestId($reopened, "composer-caption-{$account->id}");
+    waitFor($reopened, "@composer-caption-{$account->id}");
     $reopened->assertValue("@composer-caption-{$account->id}", 'A replacement suggestion.')->screenshot(false, "ai-styles-caption-saved-{$suffix}")->assertNoJavaScriptErrors();
     $reopened->click('@composer-ai-assistant')->click('@writing-assistant-mode-rephrase');
-    waitForComposerTemplatesTestId($reopened, 'writing-assistant-replace');
+    waitFor($reopened, '@writing-assistant-replace');
     PostWritingAssistant::assertPrompted(fn (AgentPrompt $prompt): bool => $prompt->agent->currentContent === 'A replacement suggestion.' && $prompt->agent->writingStyleInstructions === null);
     Http::assertNotSent(fn ($request): bool => str_contains($request->url(), 'gateway.example.test') || str_contains($request->url(), 'openrouter.ai'));
 })->with([
@@ -424,15 +424,15 @@ test('an unavailable AI default stays visible and a legacy single model needs no
     $user->update(['name' => 'Demo Reviewer', 'email' => 'reviewer@example.test', 'locale' => Locale::German]);
     $this->actingAs($user);
     $page = visit(route('app.posts.create'))->resize(1280, 900);
-    waitForComposerTemplatesDialog($page, 'post-composer-dialog');
+    waitForOpen($page, '@post-composer-dialog');
     $page->click('@composer-ai-assistant')->click('@writing-assistant-mode-generate')
         ->fill('@writing-assistant-prompt', 'Write a short synthetic announcement for our demo channel.')
         ->click('@writing-assistant-generate');
-    waitForComposerTemplatesTestId($page, 'writing-assistant-error');
+    waitFor($page, '@writing-assistant-error');
     $page->screenshot(false, 'ai-models-caption-unavailable-de')->assertNoJavaScriptErrors();
     config(['ai_models.default' => null, 'ai.default' => 'openai']);
     $legacy = visit(route('app.posts.create'));
-    waitForComposerTemplatesDialog($legacy, 'post-composer-dialog');
+    waitForOpen($legacy, '@post-composer-dialog');
     $legacy->click('@composer-ai-assistant')->assertMissing('@writing-assistant-model')->assertMissing('@writing-assistant-style');
     Http::assertNotSent(fn ($request): bool => str_contains($request->url(), 'gateway.example.test') || str_contains($request->url(), 'openrouter.ai'));
 });

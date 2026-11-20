@@ -458,8 +458,8 @@ test('selected caption opens a post while the saved production brief and media r
     $this->actingAs($user);
 
     $page = visit(route('app.create.ideas.show', $idea))->resize(...$size);
-    waitForCreateIdeaEditorDialog($page);
-    waitForCreateIdeaEditorCondition($page, "[...document.querySelectorAll('[data-testid=\"idea-media-tray\"] img')].some((image) => image.complete && image.naturalWidth > 0)");
+    waitForOpen($page, '@idea-editor');
+    waitForState($page, '@idea-media-tray img', 'element.complete && element.naturalWidth > 0');
     $page->assertScript("document.querySelector('[data-testid=\"idea-media-tray\"] img').naturalWidth > 0", true);
     selectCreateIdeaEditorText($page, $caption);
     $page->screenshot(filename: "selected-caption-{$format}");
@@ -472,7 +472,7 @@ test('selected caption opens a post while the saved production brief and media r
         $page->click('@idea-editor-create-selected-post');
     }
     waitForCreateIdeaEditorTestId($page, 'composer-base-content', $caption);
-    waitForCreateIdeaEditorCondition($page, "[...document.querySelectorAll('[data-testid=\"composer-media-tray\"] img')].some((image) => image.complete && image.naturalWidth > 0)");
+    waitForState($page, '@composer-media-tray img', 'element.complete && element.naturalWidth > 0');
 
     $page->assertValue('@composer-base-content', $caption)
         ->assertScript("document.querySelector('[data-testid=\"composer-media-tray\"] img').naturalWidth > 0", true)
@@ -496,7 +496,7 @@ test('editing or collapsing a caption selection restores the complete idea hando
     $idea = createIdeaEditorIdea($workspace, $user, ['body' => $body]);
     $this->actingAs($user);
     $page = visit(route('app.create.ideas.show', $idea));
-    waitForCreateIdeaEditorDialog($page);
+    waitForOpen($page, '@idea-editor');
 
     selectCreateIdeaEditorText($page, 'Caption text');
     $page->keys('@idea-editor-body', 'ArrowRight');

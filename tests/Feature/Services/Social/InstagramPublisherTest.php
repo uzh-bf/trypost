@@ -2470,6 +2470,21 @@ test('instagram reel re-encodes a cover that is not a jpeg of up to 8 mb', funct
     'a jpeg over 8 mb' => [['size' => 9 * 1024 * 1024]],
 ]);
 
+test('instagram reel uses the frame when the stored cover is missing', function () {
+    Storage::fake();
+    config(['filesystems.verify_media' => true]);
+    $video = instagramVideoWithCover([]);
+    Storage::put($video['path'], 'synthetic video');
+    $this->post->update(['content_type' => ContentType::InstagramReel, 'media' => [$video]]);
+    $containerUrl = fakeInstagramReelPublish();
+
+    $this->publisher->publish($this->post);
+
+    Http::assertSent(fn (Request $request): bool => $request->url() === $containerUrl
+        && data_get($request->data(), 'cover_url') === null
+        && data_get($request->data(), 'thumb_offset') === 1500);
+});
+
 test('instagram reel publishes with the picked frame when the cover cannot be made a jpeg', function () {
     Storage::fake();
     $this->post->update(['content_type' => ContentType::InstagramReel, 'media' => [instagramVideoWithCover(['mime_type' => 'image/png', 'url' => 'https://example.com/media/2026-01/cover.png'])]]);

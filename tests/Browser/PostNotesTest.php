@@ -42,7 +42,8 @@ test('a note mentions a teammate picked from the list and takes reactions', func
 
     $page->assertScript('(() => { const field = document.querySelector("[data-testid=note-composer]").getBoundingClientRect(); const send = document.querySelector("[data-testid=note-send]").getBoundingClientRect(); return Math.abs((field.top + field.height / 2) - (send.top + send.height / 2)) <= 1 && send.right <= field.right; })()', true);
 
-    $page->fill('@note-input', 'Please check the @image, @bi');
+    $page->fill('@note-input', 'Please check the @image, ');
+    $page->typeSlowly('@note-input', '@bi', 10);
     waitForOpen($page, '@note-mention-list');
     waitForText($page, '@note-mention-option', 'Bia Lima');
     $page->assertScript('(() => { const list = document.querySelector("[data-testid=note-mention-list]").getBoundingClientRect(); return list.top >= 0 && list.bottom <= window.innerHeight; })()', true);

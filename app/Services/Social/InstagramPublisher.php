@@ -24,6 +24,7 @@ use Closure;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Log;
+use RuntimeException;
 
 class InstagramPublisher
 {
@@ -360,7 +361,7 @@ class InstagramPublisher
 
         try {
             return ['cover_url' => $this->coverUrl($cover)];
-        } catch (InstagramPublishException $exception) {
+        } catch (RuntimeException $exception) {
             Log::warning('Instagram Reel cover could not be prepared; publishing with the picked frame', [
                 'post_id' => $this->post->id,
                 'error' => $exception->getMessage(),

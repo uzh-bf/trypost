@@ -1355,12 +1355,12 @@ test('AI model choice generates alt text and admission failures preserve it', fu
         ->click('@media-editor-alt-model')->click('@media-editor-alt-model-opus')
         ->screenshot(false, "ai-models-alt-selected-{$suffix}")
         ->click('@media-editor-alt-generate');
-    waitForMediaEditor($page, "document.querySelector('[data-testid=\"media-editor-alt-text\"]')?.value !== 'Existing description.'");
+    waitForState($page, '@media-editor-alt-text', "element.value !== 'Existing description.'");
     $page->assertValue('@media-editor-alt-text', 'Four coloured squares in a grid.')->screenshot(false, "ai-models-alt-result-{$suffix}");
     MediaAltTextGenerator::assertPrompted(fn (AgentPrompt $prompt): bool => $prompt->model === 'test-opus');
     Storage::delete($asset->path);
     $page->click('@media-editor-alt-generate');
-    waitForMediaEditor($page, "document.querySelector('[data-testid=\"media-editor-alt-error\"]')?.textContent.length > 0");
+    waitForState($page, '@media-editor-alt-error', 'element.textContent.length > 0');
     $page->script(<<<'JS'
         (async () => {
             document.querySelector('[data-testid=media-editor-alt-error]').scrollIntoView({ block: 'center', behavior: 'instant' });
