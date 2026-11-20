@@ -182,6 +182,31 @@ test('daily discovery recovers stale bootstraps, bootstraps channels never boots
     Bus::assertNotDispatched(BackfillAccountPublications::class);
 });
 
+test('opted-in publication history is isolated to one channel at dispatch and execution', function () {
+    config()->set('trypost.analytics.publication_history_enabled', false);
+    $selected = SocialAccount::factory()->instagram()->create();
+    $other = SocialAccount::factory()->instagram()->create();
+    config()->set('trypost.analytics.publication_history_account_id', $selected->id);
+    Bus::fake();
+
+    $this->artisan('analytics:dispatch-publication-discovery')->assertSuccessful();
+    Bus::assertDispatchedTimes(BootstrapAccountAnalytics::class, 1);
+    Bus::assertDispatched(BootstrapAccountAnalytics::class, fn ($job) => $job->socialAccountId === $selected->id);
+    (new BootstrapAccountAnalytics($other->id))->handle();
+    expect($other->analyticsSyncStates()->exists())->toBeFalse();
+
+    (new BootstrapAccountAnalytics($selected->id))->handle();
+    $state = $selected->analyticsSyncStates()->forCollector(SyncCollector::PublicationBackfill)->firstOrFail();
+    $page = new BackfillAccountPublications($selected->id, $state->id);
+    expect($page->middleware())->not->toBeEmpty();
+    config()->set('trypost.analytics.publication_history_account_id', 'invalid');
+    $collector = Mockery::mock(PublicationHistoryCollectorFactory::class);
+    $collector->shouldNotReceive('for');
+    app()->call([$page, 'handle'], ['collectors' => $collector]);
+    expect($page->middleware())->toBe([])
+        ->and($state->fresh()->status)->toBe(SyncStatus::Pending);
+});
+
 test('bootstrap creates separate backfill and discovery states and dispatches the first page', function () {
     Bus::fake();
     CarbonImmutable::setTestNow('2026-09-23 10:00:00 UTC');
