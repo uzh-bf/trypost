@@ -16,6 +16,7 @@ use App\Models\SocialAccount;
 use App\Services\Analytics\Collectors\Publications\PublicationHistoryCollectorFactory;
 use App\Support\Analytics\AnalyticsJobLog;
 use App\Support\Analytics\AnalyticsRateLimits;
+use App\Support\Analytics\DiscoverySchedule;
 use Carbon\CarbonImmutable;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -53,7 +54,7 @@ abstract class AbstractPublicationSync implements ShouldQueue
     /** @return list<object> */
     public function middleware(): array
     {
-        if (! config('trypost.analytics.publication_history_enabled')) {
+        if (! DiscoverySchedule::enabledFor($this->socialAccountId)) {
             return [];
         }
 
@@ -68,7 +69,7 @@ abstract class AbstractPublicationSync implements ShouldQueue
     /** @return list<Limit> */
     public function analyticsRateLimits(): array
     {
-        if (! config('trypost.analytics.publication_history_enabled')) {
+        if (! DiscoverySchedule::enabledFor($this->socialAccountId)) {
             return [];
         }
 
@@ -87,7 +88,7 @@ abstract class AbstractPublicationSync implements ShouldQueue
         QueuePublicationMetricsForPage $metrics,
         AnalyticsJobLog $log,
     ): void {
-        if (! config('trypost.analytics.publication_history_enabled')) {
+        if (! DiscoverySchedule::enabledFor($this->socialAccountId)) {
             return;
         }
 
@@ -147,7 +148,7 @@ abstract class AbstractPublicationSync implements ShouldQueue
 
     public function failed(?Throwable $exception): void
     {
-        if (! config('trypost.analytics.publication_history_enabled')) {
+        if (! DiscoverySchedule::enabledFor($this->socialAccountId)) {
             return;
         }
 

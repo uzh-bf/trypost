@@ -9,6 +9,7 @@ use App\Enums\Analytics\SyncStatus;
 use App\Jobs\Analytics\BootstrapAccountAnalytics;
 use App\Jobs\Analytics\DiscoverAccountPublications;
 use App\Models\SocialAccount;
+use App\Support\Analytics\DiscoverySchedule;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
@@ -21,7 +22,10 @@ class DispatchPublicationDiscovery extends Command
 {
     public function handle(): int
     {
-        if (! config('trypost.analytics.publication_history_enabled')) {
+        $allAccounts = config('trypost.analytics.publication_history_enabled');
+        $accountId = DiscoverySchedule::accountId();
+
+        if (! $allAccounts && $accountId === null) {
             return self::SUCCESS;
         }
 
@@ -31,6 +35,7 @@ class DispatchPublicationDiscovery extends Command
         $except = (array) $this->option('except-platform');
 
         SocialAccount::query()
+            ->when(! $allAccounts, fn (Builder $query): Builder => $query->whereKey($accountId))
             ->connected()
             ->includedInAnalytics()
             ->when($only !== [], fn (Builder $query): Builder => $query->whereIn('platform', $only))

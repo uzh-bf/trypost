@@ -220,6 +220,7 @@ return [
 
     'analytics' => [
         'publication_history_enabled' => (bool) env('PUBLICATION_HISTORY_ENABLED', true),
+        'publication_history_account_id' => env('PUBLICATION_HISTORY_ACCOUNT_ID'),
         'discovery_interval_hours' => (int) env('PUBLICATION_DISCOVERY_INTERVAL_HOURS', 3),
         'x_discovery_interval_hours' => (int) env('X_PUBLICATION_DISCOVERY_INTERVAL_HOURS', 24),
         'discovery_overlap_hours' => (int) env('PUBLICATION_DISCOVERY_OVERLAP_HOURS', 6),

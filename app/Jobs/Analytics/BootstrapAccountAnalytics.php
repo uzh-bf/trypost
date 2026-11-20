@@ -12,6 +12,7 @@ use App\Models\AnalyticsPublication;
 use App\Models\AnalyticsSyncState;
 use App\Models\SocialAccount;
 use App\Services\Analytics\Collectors\Publications\PublicationHistoryCollectorFactory;
+use App\Support\Analytics\DiscoverySchedule;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -50,7 +51,7 @@ class BootstrapAccountAnalytics implements ShouldQueue
 
     public function handleFor(string $socialAccountId): void
     {
-        if (! config('trypost.analytics.publication_history_enabled')) {
+        if (! DiscoverySchedule::enabledFor($socialAccountId)) {
             return;
         }
 
