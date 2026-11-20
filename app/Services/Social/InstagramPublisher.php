@@ -6,6 +6,8 @@ namespace App\Services\Social;
 
 use App\Dto\MediaItem;
 use App\Enums\Instagram\ContainerStatus;
+use App\Enums\Instagram\TrialGraduation;
+use App\Enums\Media\CoverSource;
 use App\Enums\PostPlatform\ContentType;
 use App\Enums\SocialAccount\Platform;
 use App\Exceptions\PlatformUnavailableException;
@@ -13,9 +15,10 @@ use App\Exceptions\Social\ErrorCategory;
 use App\Exceptions\Social\InstagramPublishException;
 use App\Exceptions\Social\SocialPublishException;
 use App\Models\Post;
-use App\Services\Social\Concerns\FitsImageToCanvas;
 use App\Services\Social\Concerns\HasSocialHttpClient;
+use App\Services\Social\Concerns\HostsProcessedImages;
 use App\Services\Social\Meta\GraphError;
+use App\Support\PostPlatformMetaRules;
 use App\Support\Social\PublishCheckpoint;
 use Closure;
 use Illuminate\Http\Client\ConnectionException;
@@ -24,8 +27,8 @@ use Illuminate\Support\Facades\Log;
 
 class InstagramPublisher
 {
-    use FitsImageToCanvas;
     use HasSocialHttpClient;
+    use HostsProcessedImages;
 
     private string $baseUrl;
 
@@ -35,6 +38,10 @@ class InstagramPublisher
 
     /** Two hours of delayed retries for processing and transient Graph failures. */
     private const int STATUS_MAX_RETRIES = 120;
+
+    private const string COVER_MIME_TYPE = 'image/jpeg';
+
+    private const int COVER_MAX_BYTES = 8 * 1024 * 1024;
 
     private const string WORKFLOW_CAROUSEL_CHILDREN = 'carousel_children';
 
@@ -46,7 +53,7 @@ class InstagramPublisher
         $this->validateContentLength($post);
 
         $account = $post->socialAccount;
-        $this->baseUrl = $account->platform->instagramGraphBaseUrl();
+        $this->baseUrl = $account->platform->graphApiUrl();
 
         if ($account->needsProactiveTokenRefresh()) {
             app(ConnectionVerifier::class)->refreshToken($account);
@@ -115,7 +122,7 @@ class InstagramPublisher
             $params['alt_text'] = $alt;
         }
 
-        $params = [...$params, ...$this->userTagsParam($media->userTags()), ...$this->sharedOptions()];
+        $params = [...$params, ...$this->jsonListParam('user_tags', $media->userTags()), ...$this->sharedOptions(), ...$this->collaboratorsParam()];
 
         $containerId = $this->createContainer($instagramId, $params, 'container');
 
@@ -129,8 +136,9 @@ class InstagramPublisher
             'caption' => $content,
             'media_type' => 'REELS',
             'access_token' => $accessToken,
-            ...$this->thumbOffsetParam($media),
+            ...$this->reelCoverParam($media),
             ...$this->sharedOptions(),
+            ...$this->collaboratorsParam(),
             ...$this->reelOptions(),
         ], 'reel container');
 
@@ -152,7 +160,7 @@ class InstagramPublisher
         } else {
             $dimensions = ContentType::InstagramStory->preferredImageDimensions();
             $params['image_url'] = $this->fitImageToCanvas($media->publishUrl(), data_get($dimensions, 'width'), data_get($dimensions, 'height'));
-            $params = [...$params, ...$this->userTagsParam(array_map(
+            $params = [...$params, ...$this->jsonListParam('user_tags', array_map(
                 fn (array $tag): array => ['username' => $tag['username']],
                 $media->userTags(),
             ))];
@@ -190,7 +198,7 @@ class InstagramPublisher
                     $params['alt_text'] = $alt;
                 }
 
-                $params = [...$params, ...$this->userTagsParam($media->userTags())];
+                $params = [...$params, ...$this->jsonListParam('user_tags', $media->userTags())];
             }
 
             $containerResponse = $this->socialHttp()->post("{$this->baseUrl}/{$instagramId}/media", $params);
@@ -229,15 +237,15 @@ class InstagramPublisher
     }
 
     /**
-     * Instagram reads `user_tags` as a JSON array. Stories place the mention
-     * without a sticker, so their entries carry only the username.
+     * Instagram reads list parameters (`user_tags`, `collaborators`) as JSON
+     * arrays, and an empty one is left out.
      *
-     * @param  list<array<string, string|float>>  $tags
+     * @param  list<mixed>  $values
      * @return array<string, string>
      */
-    private function userTagsParam(array $tags): array
+    private function jsonListParam(string $name, array $values): array
     {
-        return $tags === [] ? [] : ['user_tags' => (string) json_encode($tags)];
+        return $values === [] ? [] : [$name => (string) json_encode($values)];
     }
 
     /**
@@ -265,9 +273,122 @@ class InstagramPublisher
             return [];
         }
 
-        return [
+        return array_filter([
             'share_to_feed' => data_get($this->post->meta, 'share_to_feed', true) ? 'true' : 'false',
-        ];
+            'trial_params' => $this->trialParams(),
+            'audio_configuration' => $this->audioConfiguration(),
+        ]);
+    }
+
+    /**
+     * A trial reel is shown to non-followers first, then graduated by hand
+     * or by Instagram when it performs well.
+     */
+    private function trialParams(): ?string
+    {
+        return transform(
+            TrialGraduation::tryFrom((string) data_get($this->post->meta, 'trial_graduation')),
+            fn (TrialGraduation $graduation): string => (string) json_encode(['graduation_strategy' => $graduation->value]),
+        );
+    }
+
+    /**
+     * The picked music, which the Audio API only takes from an account
+     * connected through Facebook. A volume left out is Instagram's default.
+     */
+    private function audioConfiguration(): ?string
+    {
+        $audioId = data_get($this->post->meta, 'audio.id');
+
+        if (blank($audioId)) {
+            return null;
+        }
+
+        if ($this->post->socialAccount?->platform !== Platform::InstagramFacebook) {
+            throw new InstagramPublishException(
+                userMessage: __('posts.form.instagram.music.requires_facebook'),
+                category: ErrorCategory::ContentPolicy,
+            );
+        }
+
+        $volume = fn (string $key): ?int => transform(data_get($this->post->meta, "audio.{$key}"), fn (mixed $value): int => (int) $value);
+
+        return (string) json_encode(array_filter([
+            'audio_id' => (string) $audioId,
+            'audio_volume' => $volume('audio_volume'),
+            'video_volume' => $volume('video_volume'),
+        ], fn (mixed $value): bool => $value !== null));
+    }
+
+    /**
+     * Instagram reads `collaborators` as a JSON array of usernames. Stories and
+     * carousel children take none.
+     *
+     * @return array{collaborators?: string}
+     */
+    private function collaboratorsParam(): array
+    {
+        return $this->jsonListParam('collaborators', PostPlatformMetaRules::instagramCollaborators(
+            (array) data_get($this->post->meta, 'collaborators', []),
+        ));
+    }
+
+    /**
+     * A Reel's cover: the image the user uploaded when they picked the Reel
+     * type (Instagram takes `cover_url` on Reels only and prefers it over
+     * `thumb_offset`), else the picked frame as its time, which Instagram
+     * shows exactly (the frame's screenshot is for YouTube). An image that
+     * cannot be made a JPEG falls back to the frame rather than failing.
+     *
+     * @return array{cover_url?: string, thumb_offset?: int}
+     */
+    private function reelCoverParam(MediaItem $media): array
+    {
+        $cover = $media->cover();
+
+        if (blank($cover)) {
+            return $this->thumbOffsetParam($media);
+        }
+
+        if ($media->coverSource() === CoverSource::Frame) {
+            return $this->thumbOffsetParam($media);
+        }
+
+        if (! $this->post->content_type?->supportsCustomVideoCover()) {
+            return $this->thumbOffsetParam($media);
+        }
+
+        try {
+            return ['cover_url' => $this->coverUrl($cover)];
+        } catch (InstagramPublishException $exception) {
+            Log::warning('Instagram Reel cover could not be prepared; publishing with the picked frame', [
+                'post_id' => $this->post->id,
+                'error' => $exception->getMessage(),
+            ]);
+
+            return $this->thumbOffsetParam($media);
+        }
+    }
+
+    /**
+     * Instagram fetches a Reel cover only as a JPEG of up to 8 MB, so any
+     * other image is re-encoded first.
+     */
+    private function coverUrl(MediaItem $cover): string
+    {
+        if ($cover->mime_type !== self::COVER_MIME_TYPE) {
+            return $this->hostAsJpeg($cover->publishUrl(), Platform::Instagram, self::COVER_MAX_BYTES);
+        }
+
+        if (blank($cover->size)) {
+            return $this->hostAsJpeg($cover->publishUrl(), Platform::Instagram, self::COVER_MAX_BYTES);
+        }
+
+        if ($cover->size > self::COVER_MAX_BYTES) {
+            return $this->hostAsJpeg($cover->publishUrl(), Platform::Instagram, self::COVER_MAX_BYTES);
+        }
+
+        return $cover->publishUrl();
     }
 
     /**
@@ -302,6 +423,7 @@ class InstagramPublisher
             'children' => implode(',', $childContainers),
             'access_token' => $accessToken,
             ...$this->sharedOptions(),
+            ...$this->collaboratorsParam(),
         ], 'carousel container');
 
         return $this->finishContainer($instagramId, $accessToken, $carouselId);

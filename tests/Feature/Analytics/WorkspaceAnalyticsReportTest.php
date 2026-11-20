@@ -6,7 +6,9 @@ use App\Actions\Analytics\BuildWorkspaceAnalyticsReport;
 use App\Actions\Analytics\GetAnalyticsBounds;
 use App\Actions\Analytics\ReadPublicationAnalytics;
 use App\Dto\Analytics\DateRange;
+use App\Enums\Analytics\MetricsUnavailableReason;
 use App\Enums\Analytics\ObservationProvenance;
+use App\Enums\Analytics\PublicationAvailability;
 use App\Enums\Analytics\PublicationContentType;
 use App\Enums\Analytics\SyncStatus;
 use App\Enums\SocialAccount\Platform;
@@ -22,6 +24,7 @@ use App\Models\SocialAccount;
 use App\Models\Workspace;
 use App\Support\Analytics\PeriodBuckets;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
@@ -127,6 +130,7 @@ test('workspace report keeps accounts separate and aggregates only latest normal
         ->and($report['summary']['engagement_rate']['previous'])->toBe(10.0)
         ->and($report['bounds'])->toBe(['min' => '2026-08-25', 'max' => '2026-09-10'])
         ->and($report['posts']['resolution'])->toBe('daily')
+        ->and($report['posts']['total'])->toBe(3)
         ->and(count($report['posts']['buckets']))->toBe(10)
         ->and(array_column($report['posts']['buckets'], 'total'))->toBe([0, 0, 0, 0, 1, 1, 1, 0, 0, 0])
         ->and(array_key_exists('label', $report['posts']['buckets'][0]))->toBeFalse()
@@ -135,7 +139,8 @@ test('workspace report keeps accounts separate and aggregates only latest normal
         ->and($report['followers']['total'])->toBe(170)
         ->and($report['top_posts']['reactions'][0]['social_account_key'])->toBe($instagramA->id)
         ->and($report['top_posts']['reactions'][0]['post_id'])->toBeNull()
-        ->and($report['top_posts']['reactions'][0]['reactions'])->toBe(10);
+        ->and($report['top_posts']['reactions'][0]['reactions'])->toBe(10)
+        ->and(array_column($report['top_posts']['reactions'], 'rank'))->toBe(range(1, count($report['top_posts']['reactions'])));
 
     $performanceKeys = array_column($report['performance'], 'social_account_key');
     expect($performanceKeys)->toContain($instagramA->id, $instagramB->id, $x->id);
@@ -154,6 +159,33 @@ test('top posts include the source post id for TryPost publications', function (
     );
 
     expect($report['top_posts']['reactions'][0]['post_id'])->toBe($post->id);
+});
+
+test('top posts carry the post media from our bucket instead of the network preview', function () {
+    $workspace = Workspace::factory()->create();
+    $account = analyticsReportAccount($workspace, Platform::Instagram);
+    $video = ['id' => 'video', 'path' => 'medias/reel.mp4', 'url' => 'https://cdn.trypost.test/medias/reel.mp4', 'type' => 'video', 'mime_type' => 'video/mp4', 'meta' => ['cover_offset_ms' => 1500]];
+    $document = ['id' => 'document', 'path' => 'medias/deck.pdf', 'url' => 'https://cdn.trypost.test/medias/deck.pdf', 'type' => 'document', 'mime_type' => 'application/pdf'];
+    $post = Post::factory()->forAccount($account)->published()->create(['media' => [$document, $video]]);
+    $other = Post::factory()->forAccount($account)->published()->create(['media' => [$video]]);
+    $linked = analyticsReportPublication($account, '2026-09-05 10:00:00', 9, 1, 10, 100);
+    $linked->update(['post_id' => $post->id, 'preview_metadata' => ['thumbnail_url' => 'https://scontent.cdninstagram.com/expired.jpg?oe=6ACC450F']]);
+    $commented = analyticsReportPublication($account, '2026-09-06 10:00:00', 1, 9, 10, 100);
+    $commented->update(['post_id' => $other->id]);
+    $external = analyticsReportPublication($account, '2026-09-07 10:00:00', 5, 5, 10, 100);
+    $external->update(['preview_metadata' => ['thumbnail_url' => 'https://pbs.twimg.com/media/external.jpg']]);
+
+    $report = app(BuildWorkspaceAnalyticsReport::class)->execute(
+        $workspace,
+        new DateRange(CarbonImmutable::parse('2026-09-01', 'UTC'), CarbonImmutable::parse('2026-09-10', 'UTC')),
+    );
+    $reactions = collect($report['top_posts']['reactions'])->keyBy('id');
+    $comments = collect($report['top_posts']['comments'])->keyBy('id');
+
+    expect($reactions[$linked->id]['media'])->toMatchArray(['url' => $video['url'], 'type' => 'video', 'meta' => ['cover_offset_ms' => 1500]])
+        ->and($comments[$commented->id]['media'])->toMatchArray(['url' => $video['url'], 'type' => 'video'])
+        ->and($reactions[$external->id]['media'])->toBeNull()
+        ->and($reactions[$external->id]['preview_metadata']['thumbnail_url'])->toBe('https://pbs.twimg.com/media/external.jpg');
 });
 
 test('workspace follower total stays unavailable until every connected account has an observation', function () {
@@ -368,7 +400,7 @@ test('publication detail remains scoped to the post workspace and excludes unsup
     expect(app(ReadPublicationAnalytics::class)->latestFor($post)['available'])->toBeFalse();
 
     $post->update(['platform' => Platform::LinkedIn]);
-    expect(app(ReadPublicationAnalytics::class)->latestFor($post)['reason'])->toBe('platform_not_supported');
+    expect(app(ReadPublicationAnalytics::class)->latestFor($post)['reason'])->toBe(MetricsUnavailableReason::PlatformNotSupported->value);
 });
 
 test('external YouTube upload stays a video and not a short without authoritative metadata', function () {
@@ -470,4 +502,43 @@ test('publication detail shows the current avatar of a live account', function (
     $detail = app(ReadPublicationAnalytics::class)->latestForWorkspacePublication($workspace, $publication->id);
 
     expect(data_get($detail, 'publication.account_avatar_url'))->toBe('https://current-cdn.test/social-accounts/avatar.jpg');
+});
+
+test('top posts drop the link of a publication the network deleted', function () {
+    $workspace = Workspace::factory()->create();
+    $account = analyticsReportAccount($workspace, Platform::Instagram);
+    $start = now('UTC')->subDays(10)->startOfDay();
+    $live = analyticsReportPublication($account, $start->addDays(2)->toDateTimeString(), 9, 1, 10, 100);
+    $deleted = analyticsReportPublication($account, $start->addDays(3)->toDateTimeString(), 5, 1, 6, 100);
+    $deleted->update(['availability' => PublicationAvailability::Deleted]);
+
+    $report = app(BuildWorkspaceAnalyticsReport::class)->execute($workspace, new DateRange($start, $start->addDays(9)));
+    $top = collect($report['top_posts']['reactions'])->keyBy('id');
+
+    expect(data_get($top->get($live->id), 'permalink'))->toBe($live->permalink)
+        ->and($top->has($deleted->id))->toBeTrue()
+        ->and(data_get($top->get($deleted->id), 'permalink'))->toBeNull();
+});
+
+test('publication detail opens a publication the network deleted, without its link', function () {
+    $workspace = Workspace::factory()->create();
+    $account = analyticsReportAccount($workspace, Platform::Instagram);
+    $publication = analyticsReportPublication($account, now('UTC')->subDays(3)->toDateTimeString(), 5, 1, 6, 100);
+    $publication->update(['availability' => PublicationAvailability::Deleted]);
+
+    $detail = app(ReadPublicationAnalytics::class)->latestForWorkspacePublication($workspace, $publication->id);
+
+    expect(data_get($detail, 'publication.availability'))->toBe(PublicationAvailability::Deleted->value)
+        ->and(data_get($detail, 'publication.permalink'))->toBeNull()
+        ->and(data_get($detail, 'metrics'))->not->toBeEmpty();
+});
+
+test('publication detail never opens a publication that is no longer available', function () {
+    $workspace = Workspace::factory()->create();
+    $account = analyticsReportAccount($workspace, Platform::Instagram);
+    $publication = analyticsReportPublication($account, now('UTC')->subDays(3)->toDateTimeString(), 5, 1, 6, 100);
+    $publication->update(['availability' => PublicationAvailability::Unavailable]);
+
+    expect(fn () => app(ReadPublicationAnalytics::class)->latestForWorkspacePublication($workspace, $publication->id))
+        ->toThrow(ModelNotFoundException::class);
 });

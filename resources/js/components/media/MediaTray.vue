@@ -33,7 +33,8 @@ import {
 import { cancelDragOnEscape } from '@/lib/dragPlaceholder';
 import { editorTabsFor, rulesFor, type EditorTab } from '@/lib/mediaEditor';
 import { canvaDesignId, editInCanva } from '@/lib/mediaSources/canva';
-import { acceptAttribute, isImage, isVideo } from '@/lib/mediaType';
+import { acceptAttribute, isImage, isVideo, mediaKey } from '@/lib/mediaType';
+import { withCoversFor } from '@/lib/videoFrame';
 import type { MediaUploadLimits, SharedData } from '@/types';
 import type { MediaItem } from '@/types/media';
 
@@ -70,6 +71,14 @@ const uploader =
 watch(uploader.busy, (busy) => emit('busy', busy), { immediate: true });
 
 const editorRules = computed(() => rulesFor(props.contentTypes));
+
+/** Whether a network of the post takes a cover image, so the tiles show the one uploaded. */
+const takesCoverImage = computed(() =>
+    editorRules.value.some((rule) => rule.supportsCustomVideoCover),
+);
+
+/** The items as the tiles draw them, without an uploaded cover no network of the post shows. */
+const tileItems = computed(() => withCoversFor(props.items, takesCoverImage.value));
 const itemTabs = computed<EditorTab[][]>(() =>
     props.items.map((item) => editorTabsFor(item, editorRules.value)),
 );
@@ -193,7 +202,7 @@ const tileKeys = computed(() => {
     const seen = new Map<string, number>();
 
     return props.items.map((item) => {
-        const id = item.upload_token ?? item.id;
+        const id = mediaKey(item);
         const occurrence = seen.get(id) ?? 0;
         seen.set(id, occurrence + 1);
 
@@ -388,7 +397,7 @@ const vSortableTile: Directive<HTMLElement> = {
                 <MediaTile
                     :test-id-prefix="testIdPrefix"
                     :index="index"
-                    :item="items[index]!"
+                    :item="tileItems[index]!"
                     :tabs="itemTabs[index]"
                     :disabled="disabled"
                     :error="itemErrors?.[index]"
@@ -556,7 +565,7 @@ const vSortableTile: Directive<HTMLElement> = {
             <div class="flex flex-wrap gap-2">
                 <button
                     v-for="(item, index) in suggested"
-                    :key="`${item.upload_token ?? item.id}-${index}`"
+                    :key="`${mediaKey(item)}-${index}`"
                     type="button"
                     class="size-16 shrink-0 overflow-hidden rounded-md border border-border bg-background transition-control hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring disabled:opacity-50"
                     :aria-label="item.original_filename ?? $t('posts.composer.suggested_media')"

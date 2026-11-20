@@ -15,6 +15,7 @@ return [
     'steps' => [
         'persona' => 'Senin hakkında',
         'goals' => 'Hedeflerin',
+        'software' => 'Mevcut araç',
         'plan' => 'Plan',
     ],
     'personas' => [
@@ -39,6 +40,14 @@ return [
         'manage_clients' => 'Marka veya müşteri yönetmek',
         'other' => 'Başka bir şey',
     ],
-    'plan_title' => 'Planını seç',
-    'plan_description' => 'İki planın özellikleri aynı. Fark, workspace sayısında; planı istediğiniz zaman değiştirebilirsiniz.',
+    'software_title' => 'Bugün hangi aracı kullanıyorsun?',
+    'software' => [
+        'none' => 'Henüz bir araç kullanmıyorum',
+        'other' => 'Diğer',
+    ],
+    'plan_title' => 'Hesabını etkinleştir',
+    'plan_description' => 'Kanallarını bağla ve ilk gönderini bugün planla.',
+    'plan_terms' => 'Sonra :price/ay. İstediğin zaman iptal et',
+    'plan_checkout_button' => 'Hesabımı etkinleştir',
+    'plan_cancel_anytime' => 'İstediğin zaman iptal et',
 ];

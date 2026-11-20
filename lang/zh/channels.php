@@ -7,6 +7,8 @@ return [
     'description' => '管理此工作区的频道。',
     'connect' => '连接频道',
     'settings' => '频道设置',
+    'manage' => '管理频道',
+    'set_goal' => '设置发布目标',
     'publish' => '发布',
     'insights' => 'Insights',
     'new_post' => '在此频道发布新帖子',
@@ -16,14 +18,13 @@ return [
     'connection_lost_hint' => '请重新连接此频道以继续发布。',
     'reconnect' => '重新连接',
     'refresh_connection' => '刷新连接',
+    'link_facebook_page' => '关联 Facebook 主页',
     'view_profile' => '查看主页',
     'disconnect' => '断开连接',
     'actions' => '频道操作',
 
     'reorder' => [
         'handle' => '拖动以重新排序 :name',
-        'move_up' => '上移',
-        'move_down' => '下移',
         'failed' => '无法重新排序你的频道。请重试。',
         'stale' => '加载页面后你的频道已发生变化。请刷新后重试。',
     ],
@@ -169,6 +170,25 @@ return [
         'description' => '这会删除此频道在 TryPost 中的所有帖子，包括草稿、已排期的帖子和已发布历史。已在社交网络上的帖子会保留。',
         'keyword' => '断开连接',
         'cancel' => '取消',
+    ],
+
+    'list' => [
+        'search' => '按名称、@用户名或平台搜索',
+        'networks' => '网络',
+        'networks_search' => '搜索网络',
+        'no_networks' => '未找到网络',
+        'columns' => [
+            'channel' => '频道',
+            'timezone' => '时区',
+            'posting_times' => '发布时间',
+            'this_week' => '本周',
+        ],
+        'posting_times_per_week' => '每周 :count 次',
+        'no_posting_times' => '没有发布时间',
+        'no_results' => '没有符合搜索的频道。',
+        'connection_lost' => '此频道已断开连接',
+        'settings' => '设置',
+        'more_actions' => '更多操作',
     ],
 
     'settings_page' => [

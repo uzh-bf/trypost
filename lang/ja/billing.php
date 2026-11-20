@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 return [
     'title' => 'お支払い',
 
@@ -12,7 +14,6 @@ return [
     'subscribe' => [
         'billed_monthly' => '月払い',
         'prices' => [
-            'first_month' => '$1',
             'socials' => ['monthly' => '$19', 'yearly_per_month' => '$15.83', 'yearly' => '$190'],
             'workspaces' => ['monthly' => '$99', 'yearly_per_month' => '$82.50', 'yearly' => '$990'],
         ],
@@ -24,6 +25,7 @@ return [
         'yearly' => '年額',
         'save_two_months' => '2か月分無料',
         'per_month' => '/月',
+        'per_year' => '/年',
         'workspaces_one' => 'ワークスペース 1 つ',
         'workspaces_unlimited' => '無制限のワークスペース',
         'workspaces_tooltip' => 'ワークスペースは 1 つのブランドや顧客ごとの独立した領域です。SNS アカウント、署名、ラベル、アナリティクス、メンバー権限、MCP 接続をそれぞれ個別に持ちます。',
@@ -33,54 +35,70 @@ return [
         'select' => ':plan を選ぶ',
         'upgrade' => ':plan にアップグレード',
         'downgrade' => ':plan にダウングレード',
-        'start_first_month' => ':priceで始める',
-        'per_first_month' => '/初月',
-        'then_monthly' => 'その後は:price/月',
         'billed_yearly_total' => '年払い · :price（2か月分無料）',
         'socials_tagline' => 'クリエイターや小規模ブランド向け。',
         'workspaces_tagline' => '代理店や大規模ビジネス向け。',
         'everything_included' => 'すべて含まれます',
         'features' => [
             'networks_all' => 'すべてのSNSに対応',
-            'networks_all_tooltip' => 'これらすべてのSNSに投稿できます。',
-            'accounts_unlimited' => 'ソーシャルアカウント数無制限',
+            'networks_all_tooltip' => 'すべてに1か所から投稿できます。',
+            'accounts_unlimited' => 'SNSアカウント無制限',
             'accounts_unlimited_tooltip' => 'アカウントはいくつでも接続できます。同じSNSの複数アカウントも可能です。例えばInstagramを3つ。',
-            'calendar' => 'カレンダー：月・週表示',
-            'calendar_tooltip' => '1か月をひと目で把握：予定中、予約済み、公開済みの投稿がすべて見えます。詳しく見たいときは週表示に切り替え。',
-            'ai' => 'TryPost Copilot',
-            'ai_tooltip' => '投稿の作成と見直しを手伝うAIアシスタント。',
-            'mcp' => 'MCP：Claude、ChatGPT、Grokから投稿',
-            'mcp_tooltip' => 'Claude、ChatGPT、Grok をワークスペースに接続。投稿の作成と予約、指標の取得、成果の高い投稿の把握、自分のデータに基づく次のコンテンツの計画まで頼めます。',
-            'repurpose' => 'Repurpose：1本の投稿を複数に展開',
-            'repurpose_tooltip' => '元になるアカウントを選びます。そこに新しく投稿するたびに、他のSNSへ自動で再投稿されます。TryPostを開く必要はありません。',
-            'analytics' => 'アナリティクス',
-            'analytics_tooltip' => 'インプレッション、リーチ、いいね、コメントなどの指標を、投稿ごと・アカウントごとに1か所で確認できます。',
-            'team' => 'メンバー数無制限',
+            'calendar' => 'コンテンツカレンダー',
+            'ideas' => 'コンテンツ企画',
+            'ideas_tooltip' => 'アイデアをメモして1か所にまとめ、いいものはいつでもコンテンツにできます。',
+            'calendar_tooltip' => '予約済み・公開済みの投稿を、月表示や週表示でまとめて確認できます。',
+            'ai' => 'AIライティングアシスタント',
+            'ai_tooltip' => 'AIで投稿を作成・書き直し、トーンも調整。あなたの言語で使えます。',
+            'mcp' => 'ClaudeやChatGPTからTryPostを操作',
+            'mcp_tooltip' => 'Claude、ChatGPT、その他のAIを接続。投稿の作成と予約、キューの補充、アイデアの整理、成長の確認を頼めます。',
+            'repurpose' => '動画の自動再投稿',
+            'repurpose_tooltip' => 'Instagramに動画を投稿しましたか？TryPostがTikTok、YouTube、Facebookなど他のSNSに自動で再投稿します。',
+            'analytics' => '高度な分析',
+            'analytics_tooltip' => 'フォロワー合計など全SNSをまとめて確認、またはSNS別・投稿別に絞り込み。再生数、リーチ、いいね、コメントなどで、何が効果的かがわかります。',
+            'team' => 'チームメンバー無制限',
             'team_tooltip' => '追加料金なしで、チームに何人でも招待できます。各メンバーができることを設定し、公開前に投稿を承認できます。',
         ],
     ],
 
     'current_plan' => [
+        'statuses' => [
+            'active' => '有効',
+            'trial' => '無料トライアル',
+            'cancelling' => '解約済み',
+            'past_due' => '延滞',
+        ],
         'change' => 'プランを変更',
-        'price_monthly' => ':price/月',
-        'price_yearly' => ':price/年',
+        'subscribe' => '今すぐ申し込む',
         'trial_until' => ':dateまでトライアル',
-        'renews' => '自動更新',
         'cancelled' => '解約済み、:dateに終了',
-        'workspaces_usage' => 'ワークスペース: :count / :limit',
+        'discount_until' => ':dateまで:discount割引',
+        'discount_forever' => '毎回の支払いで:discount割引',
+        'discount_once' => '次回の支払いで:discount割引',
     ],
 
     'subscription' => [
         'title' => 'お支払い方法',
+        'default' => 'デフォルト',
         'description' => 'カードや請求情報は Stripe で更新できます。',
         'no_payment_method' => 'まだ登録されたお支払い方法がありません。',
         'expires_on' => '有効期限 :month/:year',
         'manage_stripe' => 'Stripe で管理',
     ],
 
+    'tabs' => [
+        'plan' => 'プラン',
+        'invoices' => '請求書',
+    ],
+
     'invoices' => [
-        'title' => '請求書',
-        'description' => '過去の請求書をダウンロードできます。',
+        'columns' => [
+            'date' => '日付',
+            'amount' => '金額',
+            'status' => 'ステータス',
+        ],
+        'empty_title' => '請求書はまだありません',
+        'empty_description' => '初回のお支払い後、請求書がここに表示されます。',
         'paid' => '支払い済み',
         'download' => '請求書をダウンロード',
     ],

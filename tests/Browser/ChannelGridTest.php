@@ -9,22 +9,9 @@ use App\Models\Post;
 use App\Models\SocialAccount;
 use App\Models\User;
 use App\Models\Workspace;
+use Carbon\CarbonInterface;
 
 const CHANNEL_GRID_PIXEL = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
-
-function waitForChannelGridTestId(mixed $page, string $testId): void
-{
-    $page->script(<<<JS
-        (async () => {
-            const selector = '[data-testid="{$testId}"]';
-            for (let attempt = 0; attempt < 300; attempt++) {
-                const element = document.querySelector(selector);
-                if (element && element.getBoundingClientRect().height > 0) return;
-                await new Promise((resolve) => setTimeout(resolve, 50));
-            }
-        })();
-    JS);
-}
 
 function channelGridBrowserUser(): User
 {
@@ -40,7 +27,7 @@ function channelGridBrowserUser(): User
 /**
  * @param  list<array<string, mixed>>  $media
  */
-function channelGridBrowserPost(SocialAccount $account, string $publishedAt, ContentType $contentType, array $media): Post
+function channelGridBrowserPost(SocialAccount $account, CarbonInterface $publishedAt, ContentType $contentType, array $media): Post
 {
     return Post::factory()->forAccount($account, $contentType)->published()->create([
         'published_at' => $publishedAt,
@@ -65,22 +52,22 @@ beforeEach(function () {
 });
 
 test('an instagram channel offers the grid view and the grid lays posts out in three columns', function () {
-    $reel = channelGridBrowserPost($this->instagram, '2026-09-20 10:00:00', ContentType::InstagramReel, [
+    $reel = channelGridBrowserPost($this->instagram, now()->subDays(10)->setTime(10, 0), ContentType::InstagramReel, [
         ['id' => (string) str()->uuid(), 'path' => 'media/reel.mp4', 'url' => 'https://cdn.test/reel.mp4', 'type' => 'video', 'mime_type' => 'video/mp4'],
     ]);
-    $carousel = channelGridBrowserPost($this->instagram, '2026-09-10 10:00:00', ContentType::InstagramFeed, [channelGridImage(), channelGridImage()]);
-    $single = channelGridBrowserPost($this->instagram, '2026-09-01 10:00:00', ContentType::InstagramFeed, [channelGridImage()]);
-    $story = channelGridBrowserPost($this->instagram, '2026-09-25 10:00:00', ContentType::InstagramStory, [channelGridImage()]);
+    $carousel = channelGridBrowserPost($this->instagram, now()->subDays(20)->setTime(10, 0), ContentType::InstagramFeed, [channelGridImage(), channelGridImage()]);
+    $single = channelGridBrowserPost($this->instagram, now()->subDays(29)->setTime(10, 0), ContentType::InstagramFeed, [channelGridImage()]);
+    $story = channelGridBrowserPost($this->instagram, now()->subDays(5)->setTime(10, 0), ContentType::InstagramStory, [channelGridImage()]);
 
     $this->actingAs($this->user);
 
     $page = visit(route('app.channels.publish', $this->instagram));
-    waitForChannelGridTestId($page, 'schedule-view-grid');
+    waitFor($page, '@schedule-view-grid');
 
     $page->assertVisible('@schedule-view-grid')
         ->click('@schedule-view-grid');
 
-    waitForChannelGridTestId($page, 'channel-grid');
+    waitFor($page, '@channel-grid');
 
     $page->assertPathIs(route('app.channels.grid', $this->instagram, false))
         ->assertVisible("@grid-tile-{$reel->id}")
@@ -104,23 +91,23 @@ test('an instagram channel offers the grid view and the grid lays posts out in t
     expect(array_unique($tops))->toHaveCount(1);
 
     $page->hover("@grid-tile-{$reel->id}");
-    waitForChannelGridTestId($page, "grid-tile-tooltip-{$reel->id}");
+    waitFor($page, "@grid-tile-tooltip-{$reel->id}");
 
     expect(trim((string) $page->script("document.querySelector('[data-testid=\"grid-tile-tooltip-{$reel->id}\"] [role=\"tooltip\"]').textContent")))
-        ->toBe('This post was sent September 20, 2026 at 10:00 AM');
+        ->toBe("This post was sent {$reel->published_at->format('F j, Y \\a\\t g:i A')}");
 
     $page->assertNoJavaScriptErrors();
 });
 
 test('the grid sits under the shared channel header, which stays put while the grid scrolls', function () {
     foreach (range(1, 9) as $day) {
-        channelGridBrowserPost($this->instagram, "2026-09-0{$day} 10:00:00", ContentType::InstagramFeed, [channelGridImage()]);
+        channelGridBrowserPost($this->instagram, now()->subDays($day)->setTime(10, 0), ContentType::InstagramFeed, [channelGridImage()]);
     }
 
     $this->actingAs($this->user);
 
     $page = visit(route('app.channels.grid', $this->instagram));
-    waitForChannelGridTestId($page, 'channel-grid');
+    waitFor($page, '@channel-grid');
 
     $page->assertVisible('@header-title')
         ->assertVisible('@channel-grid-divider')
@@ -141,7 +128,7 @@ test('the grid sits under the shared channel header, which stays put while the g
         ->and($after)->toBe($before);
 
     $page->hover('@schedule-view-grid');
-    waitForChannelGridTestId($page, 'schedule-view-grid-note');
+    waitFor($page, '@schedule-view-grid-note');
 
     expect(trim((string) $page->script('document.querySelector(\'[data-testid="schedule-view-grid-note"] [role="tooltip"]\').textContent')))
         ->toBe('This is an approximation of your post grid. It may differ on other devices, and posts published directly on Instagram update when we sync them.');
@@ -150,29 +137,29 @@ test('the grid sits under the shared channel header, which stays put while the g
 });
 
 test('the grid keeps the schedule view switch and the new post button', function () {
-    channelGridBrowserPost($this->instagram, '2026-09-01 10:00:00', ContentType::InstagramFeed, [channelGridImage()]);
+    channelGridBrowserPost($this->instagram, now()->subDays(29)->setTime(10, 0), ContentType::InstagramFeed, [channelGridImage()]);
 
     $this->actingAs($this->user);
 
     $page = visit(route('app.channels.grid', $this->instagram));
-    waitForChannelGridTestId($page, 'schedule-view-grid');
+    waitFor($page, '@schedule-view-grid');
 
     $page->assertAttribute('@schedule-view-grid', 'aria-current', 'page')
         ->assertAttributeMissing('@schedule-view-list', 'aria-current')
         ->assertVisible('@schedule-view-calendar')
         ->click('@posts-new-post');
 
-    waitForChannelGridTestId($page, 'post-composer-dialog');
-    waitForChannelGridTestId($page, "composer-account-{$this->instagram->id}");
+    waitFor($page, '@post-composer-dialog');
+    waitFor($page, "@composer-account-{$this->instagram->id}");
 
     $page->assertVisible('@post-composer-dialog')
         ->assertVisible("@composer-account-{$this->instagram->id}")
         ->assertPathIs(route('app.channels.grid', $this->instagram, false));
 
     $page = visit(route('app.channels.grid', $this->instagram));
-    waitForChannelGridTestId($page, 'schedule-view-list');
+    waitFor($page, '@schedule-view-list');
     $page->click('@schedule-view-list');
-    waitForChannelGridTestId($page, 'publish-page');
+    waitFor($page, '@publish-page');
 
     $page->assertPathIs(route('app.channels.publish', $this->instagram, false))
         ->assertAttribute('@schedule-view-list', 'aria-current', 'page')
@@ -180,15 +167,15 @@ test('the grid keeps the schedule view switch and the new post button', function
 });
 
 test('clicking a carousel tile opens its media in the lightbox', function () {
-    $carousel = channelGridBrowserPost($this->instagram, '2026-09-10 10:00:00', ContentType::InstagramFeed, [channelGridImage(), channelGridImage()]);
+    $carousel = channelGridBrowserPost($this->instagram, now()->subDays(20)->setTime(10, 0), ContentType::InstagramFeed, [channelGridImage(), channelGridImage()]);
 
     $this->actingAs($this->user);
 
     $page = visit(route('app.channels.grid', $this->instagram));
-    waitForChannelGridTestId($page, "grid-tile-{$carousel->id}");
+    waitFor($page, "@grid-tile-{$carousel->id}");
 
     $page->click("@grid-tile-{$carousel->id}");
-    waitForChannelGridTestId($page, 'media-lightbox-counter');
+    waitFor($page, '@media-lightbox-counter');
 
     $page->assertVisible('@media-lightbox')
         ->assertVisible('@media-lightbox-image')
@@ -200,17 +187,49 @@ test('clicking a carousel tile opens its media in the lightbox', function () {
 
 test('the grid tooltip shows the sent time in the user zone, not the browser zone', function () {
     $this->user->update(['timezone' => 'Asia/Tokyo']);
-    $reel = channelGridBrowserPost($this->instagram, '2026-09-20 10:00:00', ContentType::InstagramReel, [
+    $reel = channelGridBrowserPost($this->instagram, now()->subDays(10)->setTime(10, 0), ContentType::InstagramReel, [
         ['id' => (string) str()->uuid(), 'path' => 'media/reel.mp4', 'url' => 'https://cdn.test/reel.mp4', 'type' => 'video', 'mime_type' => 'video/mp4'],
     ]);
     $this->actingAs($this->user);
 
     $page = visit(route('app.channels.grid', $this->instagram));
-    waitForChannelGridTestId($page, "grid-tile-{$reel->id}");
+    waitFor($page, "@grid-tile-{$reel->id}");
     $page->hover("@grid-tile-{$reel->id}");
-    waitForChannelGridTestId($page, "grid-tile-tooltip-{$reel->id}");
+    waitFor($page, "@grid-tile-tooltip-{$reel->id}");
 
     expect(trim((string) $page->script("document.querySelector('[data-testid=\"grid-tile-tooltip-{$reel->id}\"] [role=\"tooltip\"]').textContent")))
-        ->toBe('This post was sent September 20, 2026 at 7:00 PM');
+        ->toBe("This post was sent {$reel->published_at->setTimezone('Asia/Tokyo')->format('F j, Y \\a\\t g:i A')}");
+    $page->assertNoJavaScriptErrors();
+});
+
+test('the grid links to the channel board', function () {
+    $this->actingAs($this->user);
+
+    $page = visit(route('app.channels.grid', $this->instagram))->resize(1280, 900);
+    waitFor($page, '@schedule-view-board');
+
+    $page->click('@schedule-view-board');
+
+    waitForPath($page, route('app.channels.board', $this->instagram, absolute: false));
+    waitFor($page, '@board-column-draft');
+
+    $page->assertNoJavaScriptErrors();
+});
+
+test('a reel with an uploaded cover shows that cover on the grid, and one with a picked frame shows the frame', function () {
+    $video = ['path' => 'media/reel.mp4', 'url' => 'https://cdn.test/reel.mp4', 'type' => 'video', 'mime_type' => 'video/mp4'];
+    $covered = channelGridBrowserPost($this->instagram, now()->subDays(10)->setTime(10, 0), ContentType::InstagramReel, [
+        [...$video, 'id' => (string) str()->uuid(), 'meta' => ['cover_source' => 'image', 'cover' => channelGridImage()]],
+    ]);
+    $framed = channelGridBrowserPost($this->instagram, now()->subDays(12)->setTime(10, 0), ContentType::InstagramReel, [
+        [...$video, 'id' => (string) str()->uuid(), 'meta' => ['cover_offset_ms' => 2500]],
+    ]);
+
+    $this->actingAs($this->user);
+    $page = visit(route('app.channels.grid', $this->instagram));
+
+    waitForState($page, "@grid-tile-video-{$covered->id}", "element.tagName === 'IMG' && element.src.startsWith('data:image/png')");
+    waitForState($page, "@grid-tile-video-{$framed->id}", "element.tagName === 'VIDEO' && element.src.endsWith('#t=2.5')");
+
     $page->assertNoJavaScriptErrors();
 });

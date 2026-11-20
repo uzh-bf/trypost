@@ -16,8 +16,14 @@ use Laravel\Mcp\Response;
 use Laravel\Mcp\ResponseFactory;
 use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Tool;
+use Laravel\Mcp\Server\Tools\Annotations\IsDestructive;
+use Laravel\Mcp\Server\Tools\Annotations\IsOpenWorld;
+use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 
-#[Description('Add a note (internal team comment) to a post. Notes are never published to the network. Every other workspace member is emailed about it; on a post pending approval, only the approvers and the member who asked are.')]
+#[IsReadOnly(false)]
+#[IsDestructive(true)]
+#[IsOpenWorld(false)]
+#[Description('Add a note (an internal team comment, never published to the network) to a post, as the connected user. To mention a member, write @[user:id] with an id from list-post-note-mentionables-tool; to mention everyone who sees the post, write @[everyone]. A mention of someone who cannot see the post is removed. Emails: each mentioned member gets a mention email; the post\'s other participants (its author, the member who asked for approval and everyone who already wrote a note on it) get a new-note email; nobody else is emailed, and each member\'s notification settings apply. Everyone with the post open sees the note at once. On a post pending approval, only the approvers and the member who asked can see its notes. Returns the new note with mentions [{id, name}].')]
 class CreatePostNoteTool extends Tool
 {
     use AuthorizesMcpTool, ResolvesPostNotes;
@@ -49,7 +55,7 @@ class CreatePostNoteTool extends Tool
     {
         return [
             'post_id' => $schema->string()->required()->description('The UUID of the post.'),
-            'body' => $schema->string()->required()->description('The note text (max 2000 characters).'),
+            'body' => $schema->string()->required()->description('The note text (max 2000 characters). Mention a teammate with @[user:id], or everyone with @[everyone].'),
         ];
     }
 }

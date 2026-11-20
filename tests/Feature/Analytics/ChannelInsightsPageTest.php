@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Actions\Analytics\ListChannelPublicationPerformance;
 use App\Actions\Analytics\ResolveAnalyticsAccountKey;
 use App\Dto\Analytics\DateRange;
+use App\Enums\Analytics\PublicationAvailability;
 use App\Enums\SocialAccount\Platform;
 use App\Jobs\Analytics\BootstrapAccountAnalytics;
 use App\Jobs\Analytics\CollectAccountDailySnapshot;
@@ -107,6 +108,27 @@ test('the insights page renders the channel report and its publications', functi
             ->where('sync', SyncCadence::toArray())
             ->where('publications.data.1.rank', 2)
             ->where('publications.data.1.thumbnail_url', null)
+            ->etc());
+});
+
+test('publications show the post media from our bucket instead of the network preview', function () {
+    $image = ['id' => 'image', 'path' => 'medias/a.jpg', 'url' => 'https://cdn.trypost.test/medias/a.jpg', 'type' => 'image', 'mime_type' => 'image/jpeg'];
+    $video = ['id' => 'video', 'path' => 'medias/reel.mp4', 'url' => 'https://cdn.trypost.test/medias/reel.mp4', 'type' => 'video', 'mime_type' => 'video/mp4', 'meta' => ['cover_offset_ms' => 1500]];
+    $imagePost = Post::factory()->forAccount($this->instagram)->published()->create(['media' => [$image]]);
+    $videoPost = Post::factory()->forAccount($this->instagram)->published()->create(['media' => [$video]]);
+    $expired = ['preview_metadata' => ['thumbnail_url' => 'https://scontent.cdninstagram.com/expired.jpg?oe=6ACC450F']];
+    channelInsightsPublication($this->instagram, '2026-09-20 10:00:00', ['reactions_count' => 8], [...$expired, 'post_id' => $imagePost->id]);
+    channelInsightsPublication($this->instagram, '2026-09-19 10:00:00', ['reactions_count' => 3], [...$expired, 'post_id' => $videoPost->id]);
+
+    $this->actingAs($this->user)
+        ->get(route('app.channels.insights', $this->instagram))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('publications.data.0.thumbnail_url', $image['url'])
+            ->where('publications.data.0.media.url', $image['url'])
+            ->where('publications.data.1.media.url', $video['url'])
+            ->where('publications.data.1.media.type', 'video')
+            ->where('publications.data.1.media.meta.cover_offset_ms', 1500)
             ->etc());
 });
 
@@ -413,4 +435,22 @@ test('the coverage poll reloads the report without recomputing the available met
                 ->has('report.summary')
                 ->missing('availableMetrics')
                 ->missing('publications')));
+});
+
+test('a publication the network deleted stays in the table without its link', function () {
+    $live = channelInsightsPublication($this->instagram, now('UTC')->subDays(4)->toDateTimeString(), ['reactions_count' => 9]);
+    $deleted = channelInsightsPublication($this->instagram, now('UTC')->subDays(5)->toDateTimeString(), ['reactions_count' => 3], [
+        'availability' => PublicationAvailability::Deleted,
+    ]);
+
+    $this->actingAs($this->user)
+        ->get(route('app.channels.insights', $this->instagram))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('publications.data', 2)
+            ->where('publications.data.0.id', $live->id)
+            ->where('publications.data.0.permalink', $live->permalink)
+            ->where('publications.data.1.id', $deleted->id)
+            ->where('publications.data.1.permalink', null)
+            ->etc());
 });

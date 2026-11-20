@@ -7,6 +7,7 @@ return [
     'select_workspace' => '워크스페이스 선택',
     'create_workspace' => '워크스페이스 만들기',
     'new' => '새로 만들기',
+    'unfinished_post' => '완료하지 않은 게시물이 있습니다',
     'create' => '만들기',
     'new_menu' => [
         'post' => '게시물',
@@ -48,6 +49,7 @@ return [
         'github' => 'GitHub',
         'status' => '앱 상태',
         'chat' => '채팅 지원',
+        'changelog' => '새로운 기능',
         'referral' => '30% 추천 수익 받기',
         'discord' => 'Discord 커뮤니티',
         'community' => '커뮤니티',

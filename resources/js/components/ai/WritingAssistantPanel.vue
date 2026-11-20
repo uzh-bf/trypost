@@ -27,6 +27,7 @@ import type { AppPageProps } from '@/types';
 export type AssistantChannel = {
     accountId: string;
     platform: string;
+    contentType: string | null;
     label: string;
     limit: number | null;
 };
@@ -76,6 +77,7 @@ const http = useHttp({
     previous_content: '',
     platform: null as string | null,
     social_account_id: null as string | null,
+    content_type: null as string | null,
 });
 
 onBeforeUnmount(() => {
@@ -115,6 +117,7 @@ const request = async (
     http.previous_content = payload.previous_content ?? '';
     http.platform = props.channel?.platform ?? null;
     http.social_account_id = props.channel?.accountId ?? null;
+    http.content_type = props.channel?.contentType ?? null;
     try {
         const result = (await http.post(assist.url())) as
             | { content: string }

@@ -12,7 +12,9 @@ use App\Jobs\PublishPost;
 use App\Models\Media;
 use App\Models\Post;
 use App\Models\SocialAccount;
+use App\Support\Social\XPoll;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -168,6 +170,42 @@ it('persists the LinkedIn document_title meta on store', function () {
     expect(Post::where('social_account_id', $linkedin->id)->sole()->meta['document_title'])->toBe('Q2 Report');
 });
 
+it('stores a LinkedIn comment as the thread reply and refuses a second one when scheduling', function () {
+    $linkedin = SocialAccount::factory()->linkedin()->create(['workspace_id' => $this->workspace->id]);
+    $payload = fn (array $replies) => [
+        'content' => 'Our launch',
+        'social_account_id' => $linkedin->id,
+        'content_type' => ContentType::LinkedInPost->value,
+        'status' => PostStatus::Scheduled->value,
+        'scheduled_at' => now()->addDay()->toIso8601String(),
+        'meta' => ['thread_replies' => $replies],
+    ];
+
+    $this->withHeaders($this->headers)
+        ->postJson(route('api.posts.store'), $payload([['text' => 'Link in the comments', 'media' => []]]))
+        ->assertCreated()
+        ->assertJsonPath('meta.thread_replies.0.text', 'Link in the comments');
+
+    $this->withHeaders($this->headers)
+        ->postJson(route('api.posts.store'), $payload(['First', 'Second']))
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['meta.thread_replies']);
+});
+
+it('refuses a post stored as a LinkedIn comment', function () {
+    $linkedin = SocialAccount::factory()->linkedin()->create(['workspace_id' => $this->workspace->id]);
+
+    $this->withHeaders($this->headers)
+        ->postJson(route('api.posts.store'), [
+            'content' => 'Our launch',
+            'social_account_id' => $linkedin->id,
+            'content_type' => ContentType::LinkedInComment->value,
+        ])
+        ->assertUnprocessable();
+
+    expect(Post::query()->count())->toBe(0);
+});
+
 it('publishes a LinkedIn document post that has a PDF', function () {
     Queue::fake();
 
@@ -266,9 +304,9 @@ it('rejects publishing when the uploaded video runs past the content type durati
         ->assertJsonFragment(['Video is 1min 30s long, but this post type allows up to 1min.']);
 });
 
-it('rejects publishing a LinkedIn post with a GIF', function () {
-    $linkedin = SocialAccount::factory()->create(['workspace_id' => $this->workspace->id, 'platform' => Platform::LinkedIn]);
-    $post = Post::factory()->forAccount($linkedin, ContentType::LinkedInPost)->create([
+it('rejects publishing a Facebook post with a GIF', function () {
+    $facebook = SocialAccount::factory()->create(['workspace_id' => $this->workspace->id, 'platform' => Platform::Facebook]);
+    $post = Post::factory()->forAccount($facebook, ContentType::FacebookPost)->create([
         'user_id' => $this->user->id,
         'media' => [[
             'id' => 'gif-1', 'path' => 'medias/loop.gif', 'url' => 'https://example.com/loop.gif',
@@ -279,12 +317,36 @@ it('rejects publishing a LinkedIn post with a GIF', function () {
     $this->withHeaders($this->headers)
         ->putJson(route('api.posts.update', $post), [
             'status' => PostStatus::Publishing->value,
-            'content_type' => ContentType::LinkedInPost->value,
+            'content_type' => ContentType::FacebookPost->value,
         ])
         ->assertUnprocessable()
         ->assertJsonValidationErrors(['content_type'])
         ->assertJsonFragment(['This platform does not accept GIF. Remove the GIF or choose a different network.']);
 });
+
+it('accepts scheduling a LinkedIn post with a GIF', function (Platform $platform, ContentType $type) {
+    $linkedin = SocialAccount::factory()->create(['workspace_id' => $this->workspace->id, 'platform' => $platform]);
+    $post = Post::factory()->forAccount($linkedin, $type)->create([
+        'user_id' => $this->user->id,
+        'media' => [[
+            'id' => 'gif-1', 'path' => 'medias/loop.gif', 'url' => 'https://example.com/loop.gif',
+            'type' => 'image', 'mime_type' => 'image/gif', 'original_filename' => 'loop.gif', 'size' => 2 * 1024 * 1024,
+        ]],
+    ]);
+
+    $this->withHeaders($this->headers)
+        ->putJson(route('api.posts.update', $post), [
+            'status' => PostStatus::Scheduled->value,
+            'scheduled_at' => now()->addDay()->toIso8601String(),
+            'content_type' => $type->value,
+        ])
+        ->assertOk();
+
+    expect($post->fresh()->status)->toBe(PostStatus::Scheduled);
+})->with([
+    'profile' => [Platform::LinkedIn, ContentType::LinkedInPost],
+    'page' => [Platform::LinkedInPage, ContentType::LinkedInPagePost],
+]);
 
 it('rejects publishing an Instagram Reel whose stored video exceeds 300 MB', function () {
     $instagram = SocialAccount::factory()->create(['workspace_id' => $this->workspace->id, 'platform' => Platform::Instagram]);
@@ -1272,4 +1334,412 @@ it('rejects more than 24 thread replies', function () {
         'content_type' => ContentType::MastodonPost->value,
         'meta' => ['thread_replies' => array_fill(0, 25, 'Reply')],
     ])->assertUnprocessable()->assertJsonValidationErrors(['meta.thread_replies']);
+});
+
+it('persists instagram collaborators, trial reel and music', function () {
+    $instagram = SocialAccount::factory()->create(['workspace_id' => $this->workspace->id, 'platform' => Platform::InstagramFacebook]);
+
+    $this->withHeaders($this->headers)->postJson(route('api.posts.store'), [
+        'content' => 'Reel',
+        'social_account_id' => $instagram->id,
+        'content_type' => ContentType::InstagramReel->value,
+        'meta' => [
+            'collaborators' => ['@alice', 'bob', 'Alice'],
+            'trial_graduation' => 'MANUAL',
+            'audio' => ['id' => '1234567890', 'title' => 'Song', 'artist' => 'Band'],
+        ],
+    ])->assertCreated();
+
+    expect(Post::where('social_account_id', $instagram->id)->sole()->meta)->toEqual([
+        'collaborators' => ['alice', 'bob'],
+        'trial_graduation' => 'MANUAL',
+        'audio' => ['id' => '1234567890', 'title' => 'Song', 'artist' => 'Band'],
+    ]);
+});
+
+it('rejects invalid instagram collaborators and trial reels', function (array $meta, string $error) {
+    $instagram = SocialAccount::factory()->create(['workspace_id' => $this->workspace->id, 'platform' => Platform::Instagram]);
+
+    $this->withHeaders($this->headers)->postJson(route('api.posts.store'), [
+        'content' => 'Reel',
+        'social_account_id' => $instagram->id,
+        'content_type' => ContentType::InstagramReel->value,
+        'meta' => $meta,
+    ])->assertUnprocessable()->assertJsonValidationErrors($error);
+})->with([
+    'more than three' => [['collaborators' => ['a', 'b', 'c', 'd']], 'meta.collaborators'],
+    'invalid username' => [['collaborators' => ['not a user']], 'meta.collaborators.0'],
+    'unknown strategy' => [['trial_graduation' => 'SOMETIMES'], 'meta.trial_graduation'],
+]);
+
+it('rejects publishing instagram music without Facebook and a trial reel with collaborators', function (Platform $platform, array $meta, string $error) {
+    $instagram = SocialAccount::factory()->create(['workspace_id' => $this->workspace->id, 'platform' => $platform]);
+    $post = Post::factory()->forAccount($instagram, ContentType::InstagramReel)->create([
+        'user_id' => $this->user->id,
+        'content' => 'Reel',
+        'status' => PostStatus::Draft,
+        'media' => [[
+            'id' => 'video-1', 'type' => 'video', 'path' => 'medias/video.mp4', 'url' => 'https://example.com/video.mp4',
+            'mime_type' => 'video/mp4', 'original_filename' => 'video.mp4',
+        ]],
+        'meta' => $meta,
+    ]);
+
+    $this->withHeaders($this->headers)
+        ->putJson(route('api.posts.update', $post), ['status' => PostStatus::Publishing->value])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors($error);
+})->with([
+    'music on instagram login' => [Platform::Instagram, ['audio' => ['id' => '1234567890']], 'meta.audio'],
+    'music without id' => [Platform::InstagramFacebook, ['audio' => ['title' => 'Song']], 'meta.audio.id'],
+    'trial with collaborators' => [Platform::InstagramFacebook, ['collaborators' => ['alice'], 'trial_graduation' => 'MANUAL'], 'meta.trial_graduation'],
+]);
+
+it('ignores instagram reel-only meta on a feed post', function (Platform $platform, array $meta) {
+    $instagram = SocialAccount::factory()->create(['workspace_id' => $this->workspace->id, 'platform' => $platform]);
+    $post = Post::factory()->forAccount($instagram, ContentType::InstagramFeed)->create([
+        'user_id' => $this->user->id,
+        'content' => 'Feed post',
+        'status' => PostStatus::Draft,
+        'media' => [[
+            'id' => 'image-1', 'type' => 'image', 'path' => 'medias/photo.jpg', 'url' => 'https://example.com/photo.jpg',
+            'mime_type' => 'image/jpeg', 'original_filename' => 'photo.jpg',
+        ]],
+        'meta' => $meta,
+    ]);
+
+    $this->withHeaders($this->headers)
+        ->putJson(route('api.posts.update', $post), [
+            'status' => PostStatus::Scheduled->value,
+            'scheduled_at' => now()->addDay()->toIso8601String(),
+        ])
+        ->assertOk();
+
+    expect($post->fresh()->status)->toBe(PostStatus::Scheduled);
+})->with([
+    'music on instagram login' => [Platform::Instagram, ['audio' => ['id' => '1234567890']]],
+    'trial with collaborators' => [Platform::InstagramFacebook, ['collaborators' => ['alice'], 'trial_graduation' => 'MANUAL']],
+]);
+
+it('refuses scheduling a new instagram login reel with music, alone and in a batch', function (string $route, array $payload, string $error) {
+    $instagram = SocialAccount::factory()->create(['workspace_id' => $this->workspace->id, 'platform' => Platform::Instagram]);
+    $upload = Media::factory()->temporaryUpload($this->workspace)->stored()->video()->create();
+    $destination = [
+        'social_account_id' => $instagram->id,
+        'content_type' => ContentType::InstagramReel->value,
+        'meta' => ['audio' => ['id' => '1234567890']],
+    ];
+
+    $this->withHeaders($this->headers)
+        ->postJson(route($route), [
+            'content' => 'Reel',
+            'status' => PostStatus::Scheduled->value,
+            'scheduled_at' => now()->addDay()->toIso8601String(),
+            'media' => [['upload_token' => $upload->upload_token]],
+            ...($payload === [] ? $destination : ['destinations' => [$destination]]),
+        ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors([$error => __('posts.form.instagram.music.requires_facebook')]);
+
+    expect(Post::query()->where('social_account_id', $instagram->id)->exists())->toBeFalse();
+})->with([
+    'single post' => ['api.posts.store', [], 'meta.audio'],
+    'batch' => ['api.posts.batch.store', ['batch' => true], 'destinations.0.meta.audio'],
+]);
+
+it('refuses music volumes outside 0 to 100, a cover that is not a link and a track id that is not numeric', function (array $audio, string $error) {
+    $instagram = SocialAccount::factory()->create(['workspace_id' => $this->workspace->id, 'platform' => Platform::InstagramFacebook]);
+
+    $this->withHeaders($this->headers)->postJson(route('api.posts.store'), [
+        'content' => 'Reel',
+        'social_account_id' => $instagram->id,
+        'content_type' => ContentType::InstagramReel->value,
+        'meta' => ['audio' => ['id' => '1234567890', ...$audio]],
+    ])->assertUnprocessable()->assertJsonValidationErrors($error);
+})->with([
+    'music volume above 100' => [['audio_volume' => 101], 'meta.audio.audio_volume'],
+    'video volume below 0' => [['video_volume' => -1], 'meta.audio.video_volume'],
+    'cover not a link' => [['cover_url' => 'not a link'], 'meta.audio.cover_url'],
+    'track id not numeric' => [['id' => 'abc'], 'meta.audio.id'],
+]);
+
+it('creates an x poll draft and stores its poll', function () {
+    $x = SocialAccount::factory()->x()->create(['workspace_id' => $this->workspace->id]);
+
+    $this->withHeaders($this->headers)->postJson(route('api.posts.store'), [
+        'content' => 'Tabs or spaces?',
+        'status' => PostStatus::Draft->value,
+        'social_account_id' => $x->id,
+        'content_type' => ContentType::XPoll->value,
+        'meta' => ['poll' => ['options' => [' Yes ', '', 'No'], 'duration_minutes' => '60']],
+    ])->assertCreated();
+
+    expect(Post::where('social_account_id', $x->id)->sole()->meta['poll'])
+        ->toEqual(['options' => ['Yes', 'No'], 'duration_minutes' => 60]);
+});
+
+it('rejects an x poll with invalid choices or length', function (array $poll, string $error) {
+    $x = SocialAccount::factory()->x()->create(['workspace_id' => $this->workspace->id]);
+
+    $this->withHeaders($this->headers)->postJson(route('api.posts.store'), [
+        'content' => 'Tabs or spaces?',
+        'status' => PostStatus::Draft->value,
+        'social_account_id' => $x->id,
+        'content_type' => ContentType::XPoll->value,
+        'meta' => ['poll' => $poll],
+    ])->assertUnprocessable()->assertJsonValidationErrors($error);
+
+    $this->assertDatabaseMissing(Post::class, ['social_account_id' => $x->id]);
+})->with([
+    'five options' => [['options' => ['a', 'b', 'c', 'd', 'e'], 'duration_minutes' => 60], 'meta.poll.options'],
+    'option over 25 characters' => [['options' => [Str::repeat('a', 26), 'b'], 'duration_minutes' => 60], 'meta.poll.options.0'],
+    'duration below 5' => [['options' => ['a', 'b'], 'duration_minutes' => 4], 'meta.poll.duration_minutes'],
+    'duration above 10080' => [['options' => ['a', 'b'], 'duration_minutes' => 10081], 'meta.poll.duration_minutes'],
+    'duration not a number' => [['options' => ['a', 'b'], 'duration_minutes' => 'abc'], 'meta.poll.duration_minutes'],
+    'repeated option ignoring case' => [['options' => ['Yes', ' yes'], 'duration_minutes' => 60], 'meta.poll.options'],
+]);
+
+it('explains what is wrong with an x poll in plain words', function (mixed $poll, string $error, string $message) {
+    $x = SocialAccount::factory()->x()->create(['workspace_id' => $this->workspace->id]);
+
+    $this->withHeaders($this->headers)->postJson(route('api.posts.store'), [
+        'content' => 'Tabs or spaces?',
+        'status' => PostStatus::Draft->value,
+        'social_account_id' => $x->id,
+        'content_type' => ContentType::XPoll->value,
+        'meta' => ['poll' => $poll],
+    ])->assertUnprocessable()->assertJsonValidationErrors([$error => $message]);
+})->with([
+    'choice over 25 characters' => [['options' => [Str::repeat('a', 26), 'b'], 'duration_minutes' => 60], 'meta.poll.options.0', 'Each poll choice can have up to 25 characters. Shorten the longer one.'],
+    'five options' => [['options' => ['a', 'b', 'c', 'd', 'e'], 'duration_minutes' => 60], 'meta.poll.options', 'A poll can have up to 4 choices. Remove the extra ones.'],
+    'duration above 10080' => [['options' => ['a', 'b'], 'duration_minutes' => 10081], 'meta.poll.duration_minutes', 'A poll can stay open from 5 minutes to 7 days. Choose a length in that range.'],
+    'poll that is not an object' => ['Yes or no', 'meta.poll', 'Send the poll with its choices (options) and, on X and Mastodon, its length (duration_minutes).'],
+    'choices sent as text' => [['options' => 'Yes, No', 'duration_minutes' => 60], 'meta.poll.options', 'Send the poll choices as a list of text.'],
+    'a choice that is not text' => [['options' => ['Yes', ['No']], 'duration_minutes' => 60], 'meta.poll.options.1', 'Each poll choice must be text.'],
+]);
+
+it('cannot schedule an incomplete x poll', function (string $content, ?array $poll, string $error) {
+    $x = SocialAccount::factory()->x()->create(['workspace_id' => $this->workspace->id]);
+
+    $this->withHeaders($this->headers)->postJson(route('api.posts.store'), [
+        'content' => $content,
+        'status' => PostStatus::Scheduled->value,
+        'scheduled_at' => now()->addDay()->toIso8601String(),
+        'social_account_id' => $x->id,
+        'content_type' => ContentType::XPoll->value,
+        'meta' => blank($poll) ? [] : ['poll' => $poll],
+    ])->assertUnprocessable()->assertJsonValidationErrors($error);
+})->with([
+    'no poll' => ['Question', null, 'meta.poll.options'],
+    'one blank option' => ['Question', ['options' => ['Yes', ''], 'duration_minutes' => 60], 'meta.poll.options'],
+    'no duration' => ['Question', ['options' => ['Yes', 'No']], 'meta.poll.duration_minutes'],
+    'no question' => ['', ['options' => ['Yes', 'No'], 'duration_minutes' => 60], 'content'],
+]);
+
+it('asks for the question of an x poll scheduled without text', function () {
+    $x = SocialAccount::factory()->x()->create(['workspace_id' => $this->workspace->id]);
+
+    $this->withHeaders($this->headers)->postJson(route('api.posts.store'), [
+        'content' => '',
+        'status' => PostStatus::Scheduled->value,
+        'scheduled_at' => now()->addDay()->toIso8601String(),
+        'social_account_id' => $x->id,
+        'content_type' => ContentType::XPoll->value,
+        'meta' => ['poll' => ['options' => ['Yes', 'No'], 'duration_minutes' => 60]],
+    ])->assertUnprocessable()->assertJsonValidationErrors(['content' => 'Write your poll question in the post text.']);
+});
+
+it('measures x poll choices after blanks and spaces are dropped', function () {
+    $x = SocialAccount::factory()->x()->create(['workspace_id' => $this->workspace->id]);
+    $exactly25 = Str::repeat('a', XPoll::OPTION_MAX_LENGTH);
+
+    $response = $this->withHeaders($this->headers)->postJson(route('api.posts.store'), [
+        'content' => 'Pick one',
+        'status' => PostStatus::Draft->value,
+        'social_account_id' => $x->id,
+        'content_type' => ContentType::XPoll->value,
+        'meta' => ['poll' => ['options' => ['Yes', 'No', 'Maybe', "  {$exactly25}  ", ''], 'duration_minutes' => 60]],
+    ])->assertCreated();
+
+    expect(data_get(Post::query()->findOrFail($response->json('id'))->meta, 'poll.options'))
+        ->toBe(['Yes', 'No', 'Maybe', $exactly25]);
+});
+
+it('saves an incomplete x poll as a draft', function () {
+    $x = SocialAccount::factory()->x()->create(['workspace_id' => $this->workspace->id]);
+
+    $this->withHeaders($this->headers)->postJson(route('api.posts.store'), [
+        'content' => 'Question',
+        'status' => PostStatus::Draft->value,
+        'social_account_id' => $x->id,
+        'content_type' => ContentType::XPoll->value,
+        'meta' => ['poll' => ['options' => ['Yes']]],
+    ])->assertCreated();
+});
+
+it('schedules a complete x poll', function () {
+    $x = SocialAccount::factory()->x()->create(['workspace_id' => $this->workspace->id]);
+
+    $this->withHeaders($this->headers)->postJson(route('api.posts.store'), [
+        'content' => 'Question',
+        'status' => PostStatus::Scheduled->value,
+        'scheduled_at' => now()->addDay()->toIso8601String(),
+        'social_account_id' => $x->id,
+        'content_type' => ContentType::XPoll->value,
+        'meta' => ['poll' => ['options' => ['Yes', 'No'], 'duration_minutes' => 1440]],
+    ])->assertCreated();
+
+    expect(Post::where('social_account_id', $x->id)->sole()->status)->toBe(PostStatus::Scheduled);
+});
+
+it('does not store a poll on an x post', function () {
+    $x = SocialAccount::factory()->x()->create(['workspace_id' => $this->workspace->id]);
+
+    $this->withHeaders($this->headers)->postJson(route('api.posts.store'), [
+        'content' => 'Plain post',
+        'status' => PostStatus::Draft->value,
+        'social_account_id' => $x->id,
+        'content_type' => ContentType::XPost->value,
+        'meta' => ['poll' => ['options' => ['Yes', 'No'], 'duration_minutes' => 60]],
+    ])->assertCreated();
+
+    expect(Post::where('social_account_id', $x->id)->sole()->meta)->not->toHaveKey('poll');
+});
+
+it('drops the stored poll when an x poll becomes an x post', function () {
+    $x = SocialAccount::factory()->x()->create(['workspace_id' => $this->workspace->id]);
+    $post = Post::factory()->forAccount($x, ContentType::XPoll)->create([
+        'user_id' => $this->user->id,
+        'content' => 'Question',
+        'status' => PostStatus::Draft,
+        'meta' => ['poll' => ['options' => ['Yes', 'No'], 'duration_minutes' => 60]],
+    ]);
+
+    $this->withHeaders($this->headers)->putJson(route('api.posts.update', $post), [
+        'content_type' => ContentType::XPost->value,
+    ])->assertOk();
+
+    expect($post->fresh()->meta)->not->toHaveKey('poll');
+});
+
+it('refuses media on an x poll', function () {
+    $x = SocialAccount::factory()->x()->create(['workspace_id' => $this->workspace->id]);
+    $upload = Media::factory()->temporaryUpload($this->workspace)->stored()->create();
+
+    $this->withHeaders($this->headers)->postJson(route('api.posts.store'), [
+        'content' => 'Question',
+        'status' => PostStatus::Scheduled->value,
+        'scheduled_at' => now()->addDay()->toIso8601String(),
+        'social_account_id' => $x->id,
+        'content_type' => ContentType::XPoll->value,
+        'meta' => ['poll' => ['options' => ['Yes', 'No'], 'duration_minutes' => 60]],
+        'media' => [['upload_token' => $upload->upload_token]],
+    ])->assertUnprocessable();
+
+    $this->assertDatabaseMissing(Post::class, ['social_account_id' => $x->id]);
+});
+
+it('refuses to attach media to a poll', function (ContentType $type) {
+    $account = SocialAccount::factory()->{$type->platform()->value}()->create(['workspace_id' => $this->workspace->id]);
+    $post = Post::factory()->forAccount($account, $type)->create(['user_id' => $this->user->id, 'status' => PostStatus::Draft]);
+    $upload = Media::factory()->temporaryUpload($this->workspace)->stored()->create();
+    $storedMedia = Media::query()->count();
+    Http::fake();
+
+    $this->withHeaders($this->headers)->postJson(route('api.posts.store-media', $post), [
+        'media' => UploadedFile::fake()->image('photo.jpg'),
+    ])->assertUnprocessable()->assertJsonValidationErrors(['media' => __('posts.errors.media_not_accepted')]);
+
+    $this->withHeaders($this->headers)->postJson(route('api.posts.attach-media-from-upload', $post), [
+        'upload_token' => $upload->upload_token,
+    ])->assertUnprocessable()->assertJsonValidationErrors(['media' => __('posts.errors.media_not_accepted')]);
+
+    $this->withHeaders($this->headers)->postJson(route('api.posts.attach-media-from-url', $post), [
+        'urls' => [['url' => 'https://example.com/photo.png']],
+    ])->assertUnprocessable()->assertJsonValidationErrors(['urls' => __('posts.errors.media_not_accepted')]);
+
+    expect($post->fresh()->media)->toBeEmpty()
+        ->and(Media::query()->count())->toBe($storedMedia);
+    Http::assertNothingSent();
+})->with([
+    'x' => [ContentType::XPoll],
+    'mastodon' => [ContentType::MastodonPoll],
+    'threads' => [ContentType::ThreadsPoll],
+]);
+
+it('still saves a threads ghost post draft with media and attaches media to it, the poll rules being x only', function () {
+    $threads = SocialAccount::factory()->threads()->create(['workspace_id' => $this->workspace->id]);
+    $draft = Media::factory()->temporaryUpload($this->workspace)->stored()->create();
+    $attached = Media::factory()->temporaryUpload($this->workspace)->stored()->create();
+
+    $this->withHeaders($this->headers)->postJson(route('api.posts.store'), [
+        'content' => 'Boo',
+        'status' => PostStatus::Draft->value,
+        'social_account_id' => $threads->id,
+        'content_type' => ContentType::ThreadsGhostPost->value,
+        'media' => [['upload_token' => $draft->upload_token]],
+    ])->assertCreated();
+    $post = Post::where('social_account_id', $threads->id)->sole();
+
+    $this->withHeaders($this->headers)->postJson(route('api.posts.attach-media-from-upload', $post), [
+        'upload_token' => $attached->upload_token,
+    ])->assertOk();
+
+    expect($post->fresh()->media)->toHaveCount(2);
+});
+
+it('returns the poll of an x poll it creates and updates', function () {
+    $x = SocialAccount::factory()->x()->create(['workspace_id' => $this->workspace->id]);
+
+    $response = $this->withHeaders($this->headers)->postJson(route('api.posts.store'), [
+        'content' => 'Tabs or spaces?',
+        'status' => PostStatus::Draft->value,
+        'social_account_id' => $x->id,
+        'content_type' => ContentType::XPoll->value,
+        'meta' => ['poll' => ['options' => ['Tabs', 'Spaces'], 'duration_minutes' => 60]],
+    ])->assertCreated()
+        ->assertJsonPath('content_type', ContentType::XPoll->value)
+        ->assertJsonPath('meta.poll.options', ['Tabs', 'Spaces'])
+        ->assertJsonPath('meta.poll.duration_minutes', 60);
+
+    $this->withHeaders($this->headers)->putJson(route('api.posts.update', $response->json('id')), [
+        'meta' => ['poll' => ['duration_minutes' => 4320]],
+    ])->assertOk()
+        ->assertJsonPath('content_type', ContentType::XPoll->value)
+        ->assertJsonPath('meta.poll.options', ['Tabs', 'Spaces'])
+        ->assertJsonPath('meta.poll.duration_minutes', 4320);
+
+    $this->withHeaders($this->headers)->getJson(route('api.posts.show', $response->json('id')))
+        ->assertOk()
+        ->assertJsonPath('meta.poll.duration_minutes', 4320);
+});
+
+it('keeps a scheduled x poll scheduled with its choices when only its length changes', function () {
+    Queue::fake();
+    $x = SocialAccount::factory()->x()->create(['workspace_id' => $this->workspace->id]);
+    $post = Post::factory()->forAccount($x, ContentType::XPoll)->scheduled()->create([
+        'user_id' => $this->user->id,
+        'content' => 'Tabs or spaces?',
+        'meta' => ['poll' => ['options' => ['Tabs', 'Spaces'], 'duration_minutes' => 1440]],
+    ]);
+
+    $this->withHeaders($this->headers)->putJson(route('api.posts.update', $post), [
+        'meta' => ['poll' => ['duration_minutes' => 60]],
+    ])->assertOk();
+
+    expect($post->fresh())
+        ->status->toBe(PostStatus::Scheduled)
+        ->content_type->toBe(ContentType::XPoll)
+        ->meta->toEqual(['poll' => ['options' => ['Tabs', 'Spaces'], 'duration_minutes' => 60]]);
+});
+
+it('still attaches media to a draft without a channel', function () {
+    $post = Post::factory()->create(['workspace_id' => $this->workspace->id, 'user_id' => $this->user->id, 'status' => PostStatus::Draft]);
+    $upload = Media::factory()->temporaryUpload($this->workspace)->stored()->create();
+
+    $this->withHeaders($this->headers)->postJson(route('api.posts.attach-media-from-upload', $post), [
+        'upload_token' => $upload->upload_token,
+    ])->assertSuccessful();
+
+    expect($post->fresh())->content_type->toBeNull()->media->toHaveCount(1);
 });

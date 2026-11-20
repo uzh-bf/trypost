@@ -7,6 +7,7 @@ return [
     'select_workspace' => 'Workspace auswählen',
     'create_workspace' => 'Workspace erstellen',
     'new' => 'Neu',
+    'unfinished_post' => 'Du hast einen Beitrag nicht fertiggestellt',
     'create' => 'Erstellen',
     'new_menu' => [
         'post' => 'Beitrag',
@@ -48,6 +49,7 @@ return [
         'github' => 'GitHub',
         'status' => 'App-Status',
         'chat' => 'Chat-Support',
+        'changelog' => 'Neuigkeiten',
         'referral' => '30% Provision verdienen',
         'discord' => 'Discord-Community',
         'community' => 'Community',

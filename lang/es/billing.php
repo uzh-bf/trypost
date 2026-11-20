@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 return [
     'title' => 'Facturación',
 
@@ -12,7 +14,6 @@ return [
     'subscribe' => [
         'billed_monthly' => 'Facturado mensualmente',
         'prices' => [
-            'first_month' => '$1',
             'socials' => ['monthly' => '$19', 'yearly_per_month' => '$15.83', 'yearly' => '$190'],
             'workspaces' => ['monthly' => '$99', 'yearly_per_month' => '$82.50', 'yearly' => '$990'],
         ],
@@ -24,6 +25,7 @@ return [
         'yearly' => 'Anual',
         'save_two_months' => '2 meses gratis',
         'per_month' => '/mes',
+        'per_year' => '/año',
         'workspaces_one' => 'Un workspace',
         'workspaces_unlimited' => 'Workspaces ilimitados',
         'workspaces_tooltip' => 'Un workspace es una marca o cliente, separado del resto: con sus propias redes sociales, firmas, etiquetas, analíticas, permisos de miembros y conexión MCP.',
@@ -33,54 +35,70 @@ return [
         'select' => 'Elegir :plan',
         'upgrade' => 'Mejorar a :plan',
         'downgrade' => 'Bajar a :plan',
-        'start_first_month' => 'Empezar por :price',
-        'per_first_month' => '/primer mes',
-        'then_monthly' => 'Luego, :price/mes',
         'billed_yearly_total' => 'Facturación anual · :price (2 meses gratis)',
         'socials_tagline' => 'Ideal para creadores y marcas pequeñas.',
         'workspaces_tagline' => 'Ideal para agencias y negocios grandes.',
         'everything_included' => 'Todo incluido',
         'features' => [
             'networks_all' => 'Todas las redes sociales incluidas',
-            'networks_all_tooltip' => 'Puedes publicar en todas estas redes.',
+            'networks_all_tooltip' => 'Publica en todas desde un solo lugar.',
             'accounts_unlimited' => 'Cuentas sociales ilimitadas',
             'accounts_unlimited_tooltip' => 'Conecta todas las cuentas que quieras, incluso varias de la misma red. Tres Instagrams, por ejemplo.',
-            'calendar' => 'Calendario mensual y semanal',
-            'calendar_tooltip' => 'Ve todo tu mes de un vistazo: lo planificado, lo programado y lo ya publicado. Cambia a semana cuando necesites el detalle.',
-            'ai' => 'TryPost Copilot',
-            'ai_tooltip' => 'Tu asistente de IA para escribir y revisar posts.',
-            'mcp' => 'MCP: publica desde Claude, ChatGPT o Grok',
-            'mcp_tooltip' => 'Conecta Claude, ChatGPT o Grok a tu workspace. Pídele crear y programar posts, sacar métricas, ver qué funcionó mejor y planificar lo siguiente con tus propios datos.',
-            'repurpose' => 'Repurpose: convierte un post en muchos',
-            'repurpose_tooltip' => 'Elige una cuenta de origen. Cada publicación nueva que hagas ahí se republica automáticamente en tus otras redes. No necesitas abrir TryPost.',
-            'analytics' => 'Analytics',
-            'analytics_tooltip' => 'Obtén métricas como impresiones, alcance, likes y comentarios de cada publicación y cada cuenta, todo en un solo lugar.',
-            'team' => 'Miembros ilimitados',
+            'calendar' => 'Calendario de contenido',
+            'ideas' => 'Planificación de contenido',
+            'ideas_tooltip' => 'Anota tus ideas, organízalas en un solo lugar y convierte las mejores en contenido cuando quieras.',
+            'calendar_tooltip' => 'Ve todos tus posts programados y publicados en un solo lugar, por mes o por semana.',
+            'ai' => 'Asistente de IA para escribir',
+            'ai_tooltip' => 'Escribe, reescribe y ajusta el tono de tus posts con IA, en tu idioma.',
+            'mcp' => 'Usa TryPost desde Claude o ChatGPT',
+            'mcp_tooltip' => 'Conecta Claude, ChatGPT u otra IA. Pídele crear y programar posts, llenar tu cola, organizar ideas y mostrar tu crecimiento.',
+            'repurpose' => 'Republicación automática de videos',
+            'repurpose_tooltip' => '¿Publicaste un video en Instagram? TryPost lo republica automáticamente en TikTok, YouTube, Facebook y tus otras redes.',
+            'analytics' => 'Analíticas avanzadas',
+            'analytics_tooltip' => 'Ve todas tus redes juntas, como el total de seguidores, o filtra por red y por post. Vistas, alcance, me gusta, comentarios y más, para saber qué funciona.',
+            'team' => 'Miembros de equipo ilimitados',
             'team_tooltip' => 'Invita a todas las personas que quieras a tu equipo, sin coste extra. Define qué puede hacer cada una y aprueba los posts antes de publicarlos.',
         ],
     ],
 
     'current_plan' => [
+        'statuses' => [
+            'active' => 'Activo',
+            'trial' => 'Prueba gratis',
+            'cancelling' => 'Cancelado',
+            'past_due' => 'Vencido',
+        ],
         'change' => 'Cambiar plan',
-        'price_monthly' => ':price/mes',
-        'price_yearly' => ':price/año',
+        'subscribe' => 'Suscribirse ahora',
         'trial_until' => 'Prueba hasta el :date',
-        'renews' => 'Se renueva automáticamente',
         'cancelled' => 'Cancelado, termina el :date',
-        'workspaces_usage' => 'Workspaces: :count de :limit',
+        'discount_until' => ':discount de descuento hasta el :date',
+        'discount_forever' => ':discount de descuento en todos los pagos',
+        'discount_once' => ':discount de descuento en tu próximo pago',
     ],
 
     'subscription' => [
-        'title' => 'Método de pago',
+        'title' => 'Métodos de pago',
+        'default' => 'Predeterminado',
         'description' => 'Actualiza tu tarjeta o datos de facturación en Stripe.',
         'no_payment_method' => 'Aún no hay método de pago registrado.',
         'expires_on' => 'Vence el :month/:year',
         'manage_stripe' => 'Gestionar en Stripe',
     ],
 
+    'tabs' => [
+        'plan' => 'Plan',
+        'invoices' => 'Facturas',
+    ],
+
     'invoices' => [
-        'title' => 'Facturas',
-        'description' => 'Descarga tus facturas anteriores.',
+        'columns' => [
+            'date' => 'Fecha',
+            'amount' => 'Importe',
+            'status' => 'Estado',
+        ],
+        'empty_title' => 'Aún no hay facturas',
+        'empty_description' => 'Tus facturas aparecerán aquí después de tu primer pago.',
         'paid' => 'Pagado',
         'download' => 'Descargar factura',
     ],

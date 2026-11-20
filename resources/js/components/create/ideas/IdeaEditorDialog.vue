@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { router, useForm, usePage } from '@inertiajs/vue3';
+import { router, useForm } from '@inertiajs/vue3';
 import {
     IconCheck,
     IconChevronDown,
@@ -13,7 +13,9 @@ import {
 import { computed, nextTick, ref, watch } from 'vue';
 
 import WritingAssistantPanel from '@/components/ai/WritingAssistantPanel.vue';
+import LabelChips from '@/components/labels/LabelChips.vue';
 import LabelFilter from '@/components/labels/LabelFilter.vue';
+import GiphyDialog from '@/components/media/GiphyDialog.vue';
 import MediaTray from '@/components/media/MediaTray.vue';
 import UnsplashDialog from '@/components/media/UnsplashDialog.vue';
 import MediaEditorDialog, {
@@ -39,12 +41,13 @@ import {
     type MediaImportStarted,
     useMediaImport,
 } from '@/composables/useMediaImport';
-import { useMediaUpload } from '@/composables/useMediaUpload';
+import { mediaUploadLimits, useMediaUpload } from '@/composables/useMediaUpload';
+import { filled } from '@/lib/helpers';
 import { editorTabsFor, rulesFor } from '@/lib/mediaEditor';
 import { isGooglePickerOpen } from '@/lib/mediaSources/googleDrive';
 import { acceptAttribute } from '@/lib/mediaType';
+import { filterBySearch, matchesSearch } from '@/lib/search';
 import { store, update } from '@/routes/app/create/ideas';
-import type { MediaUploadLimits, SharedData } from '@/types';
 import {
     columnKey,
     type IdeaDraft,
@@ -80,14 +83,6 @@ const form = useForm({
 const media = ref<MediaItem[]>([...(idea?.media ?? [])]);
 const submittedMediaIds = ref<string[]>([]);
 
-const page = usePage<SharedData>();
-const mediaUploadLimits = (): MediaUploadLimits =>
-    page.props.mediaUploadLimits ?? {
-        max_bytes: { image: 0, video: 0, document: 0 },
-        extensions: { image: [], video: [], document: [] },
-        upload_retention_hours: 0,
-        heic: false,
-    };
 const appendMedia = (
     item: MediaItem,
     _key?: string,
@@ -120,8 +115,14 @@ const openUnsplash = (): void => {
     unsplashOpen.value = true;
 };
 
+const giphyOpen = ref(false);
+
+const openGiphy = (): void => {
+    giphyOpen.value = true;
+};
+
 const mediaImport = useMediaImport();
-const onImportStarted = (started: MediaImportStarted): void =>
+const onImportStarted = (started: MediaImportStarted): Promise<void> =>
     mediaImport.track(uploader, started);
 const {
     uploading: editUploading,
@@ -211,15 +212,9 @@ const currentStage = computed(
         props.stages.find((stage) => stage.id === form.idea_stage_id) ?? null,
 );
 
-const filteredStages = computed(() => {
-    const query = stageSearch.value.trim().toLocaleLowerCase();
-
-    return query
-        ? props.stages.filter((stage) =>
-              stage.name.toLocaleLowerCase().includes(query),
-          )
-        : props.stages;
-});
+const filteredStages = computed(() =>
+    filterBySearch(props.stages, stageSearch.value, (stage) => [stage.name]),
+);
 
 const availableLabels = ref([...props.labels]);
 
@@ -235,6 +230,8 @@ const selectedLabels = computed(() =>
         form.label_ids.includes(label.id),
     ),
 );
+
+const hasSelectedLabels = computed(() => filled(selectedLabels.value));
 
 const addLabel = (label: IdeaLabel): void => {
     if (!availableLabels.value.some(({ id }) => id === label.id)) {
@@ -462,6 +459,7 @@ const iconButtonClass =
                                 <input
                                     v-model="stageSearch"
                                     type="search"
+                                    data-testid="idea-editor-stage-search"
                                     :aria-label="$t('create.ideas.stages_search')"
                                     :placeholder="
                                         $t('create.ideas.stages_search')
@@ -478,7 +476,11 @@ const iconButtonClass =
                             >
                                 <button
                                     v-for="option in [
-                                        null,
+                                        ...(matchesSearch(stageSearch, [
+                                            $t('create.ideas.unassigned'),
+                                        ])
+                                            ? [null]
+                                            : []),
                                         ...filteredStages.map(
                                             (stage) => stage.id,
                                         ),
@@ -526,37 +528,14 @@ const iconButtonClass =
                                 data-testid="idea-editor-labels"
                             >
                                 <IconTag class="size-4 shrink-0" />
-                                <span v-if="!selectedLabels.length">{{
+                                <span v-if="!hasSelectedLabels">{{
                                     $t('create.ideas.editor.labels')
                                 }}</span>
-                                <span
+                                <LabelChips
                                     v-else
-                                    class="flex min-w-0 items-center gap-1.5 overflow-hidden"
-                                >
-                                    <span
-                                        v-for="label in selectedLabels.slice(
-                                            0,
-                                            2,
-                                        )"
-                                        :key="label.id"
-                                        class="flex min-w-0 items-center gap-1"
-                                    >
-                                        <span
-                                            class="size-2 shrink-0 rounded-full"
-                                            :style="{
-                                                backgroundColor: label.color,
-                                            }"
-                                        />
-                                        <span class="truncate">{{
-                                            label.name
-                                        }}</span>
-                                    </span>
-                                    <span
-                                        v-if="selectedLabels.length > 2"
-                                        class="shrink-0 text-muted-foreground"
-                                        >+{{ selectedLabels.length - 2 }}</span
-                                    >
-                                </span>
+                                    :labels="selectedLabels"
+                                    test-id="idea-editor-labels-chip"
+                                />
                                 <IconChevronDown
                                     class="size-4 shrink-0 text-muted-foreground"
                                 />
@@ -658,6 +637,7 @@ const iconButtonClass =
                     <MediaSourceMenu
                         test-id-prefix="idea-editor"
                         @import-started="onImportStarted"
+                        @open-giphy="openGiphy"
                         @open-unsplash="openUnsplash"
                         @upload="pickFiles"
                     />
@@ -751,5 +731,9 @@ const iconButtonClass =
         :content-types="[]"
         @apply="onMediaEdited"
     />
-    <UnsplashDialog v-model:open="unsplashOpen" @picked="appendMedia" />
+    <UnsplashDialog
+        v-model:open="unsplashOpen"
+        @import-started="onImportStarted"
+    />
+    <GiphyDialog v-model:open="giphyOpen" @import-started="onImportStarted" />
 </template>

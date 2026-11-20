@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Enums\User\Goal;
 use App\Enums\User\Persona;
+use App\Enums\User\PreviousSoftware;
 use App\Enums\User\ReferralSource;
 use App\Models\Post;
 use App\Models\User;
@@ -17,12 +18,10 @@ use App\Models\Workspace;
  */
 function assertNoHorizontalOverflow(mixed $page, string $label): void
 {
+    waitForState($page, 'h1, h2, main, [data-sidebar="trigger"]', 'true');
+
     $result = $page->script(<<<'JS'
         (async () => {
-            for (let i = 0; i < 80; i++) {
-                if (document.querySelector('h1, h2, main, [data-sidebar="trigger"]')) break;
-                await new Promise((r) => setTimeout(r, 50));
-            }
             await new Promise((r) => setTimeout(r, 400));
             const vw = window.innerWidth;
             let worst = null;
@@ -91,6 +90,7 @@ test('auth and welcome pages do not overflow horizontally on a phone', function 
     $user->update([
         'persona' => Persona::Agency->value,
         'goals' => [Goal::SaveTime->value],
+        'previous_software' => PreviousSoftware::Buffer->value,
         'referral_source' => ReferralSource::ProductHunt->value,
     ]);
     $workspace = Workspace::factory()->create([
@@ -102,6 +102,7 @@ test('auth and welcome pages do not overflow horizontally on a phone', function 
     $this->actingAs($user->fresh());
 
     $welcomePages = [
+        'welcome software' => route('app.welcome.software'),
         'welcome plan' => route('app.welcome.plan'),
     ];
 

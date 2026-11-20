@@ -15,6 +15,7 @@ return [
     'steps' => [
         'persona' => 'あなたについて',
         'goals' => '目標',
+        'software' => '現在のツール',
         'plan' => 'プラン',
     ],
     'personas' => [
@@ -39,6 +40,14 @@ return [
         'manage_clients' => 'ブランドやクライアントを管理',
         'other' => 'その他',
     ],
-    'plan_title' => 'プランを選ぶ',
-    'plan_description' => '2つのプランの機能は同じです。違いはワークスペースの数だけで、プランはいつでも変更できます。',
+    'software_title' => '今どのツールを使っていますか？',
+    'software' => [
+        'none' => 'まだ使っていない',
+        'other' => 'その他',
+    ],
+    'plan_title' => 'アカウントを有効にしましょう',
+    'plan_description' => 'チャンネルを連携して、今日最初の投稿を予約しましょう。',
+    'plan_terms' => 'その後は:price/月。いつでも解約できます',
+    'plan_checkout_button' => 'アカウントを有効にする',
+    'plan_cancel_anytime' => 'いつでも解約できます',
 ];

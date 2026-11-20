@@ -7,6 +7,8 @@ return [
     'description' => 'Gestisci i canali di questo workspace.',
     'connect' => 'Collega canale',
     'settings' => 'Impostazioni del canale',
+    'manage' => 'Gestisci canali',
+    'set_goal' => 'Imposta un obiettivo di pubblicazione',
     'publish' => 'Pubblica',
     'insights' => 'Insights',
     'new_post' => 'Nuovo post in questo canale',
@@ -16,14 +18,13 @@ return [
     'connection_lost_hint' => 'Ricollega questo canale per continuare a pubblicare.',
     'reconnect' => 'Ricollega',
     'refresh_connection' => 'Aggiorna connessione',
+    'link_facebook_page' => 'Collega a una Pagina Facebook',
     'view_profile' => 'Visualizza profilo',
     'disconnect' => 'Scollega',
     'actions' => 'Azioni del canale',
 
     'reorder' => [
         'handle' => 'Trascina per riordinare :name',
-        'move_up' => 'Sposta su',
-        'move_down' => 'Sposta giù',
         'failed' => 'Impossibile riordinare i tuoi canali. Riprova.',
         'stale' => 'I tuoi canali sono cambiati da quando hai caricato la pagina. Aggiorna e riprova.',
     ],
@@ -169,6 +170,25 @@ return [
         'description' => 'Questo elimina tutti i post di questo canale in TryPost, compresi bozze, post programmati e la cronologia dei pubblicati. I post già presenti sul social restano lì.',
         'keyword' => 'disconnetti',
         'cancel' => 'Annulla',
+    ],
+
+    'list' => [
+        'search' => 'Cerca per nome, @utente o social',
+        'networks' => 'Reti',
+        'networks_search' => 'Cerca reti',
+        'no_networks' => 'Nessuna rete trovata',
+        'columns' => [
+            'channel' => 'Canale',
+            'timezone' => 'Fuso orario',
+            'posting_times' => 'Orari',
+            'this_week' => 'Questa settimana',
+        ],
+        'posting_times_per_week' => ':count a settimana',
+        'no_posting_times' => 'Nessun orario',
+        'no_results' => 'Nessun canale corrisponde alla ricerca.',
+        'connection_lost' => 'Questo canale ha perso la connessione',
+        'settings' => 'Impostazioni',
+        'more_actions' => 'Altre azioni',
     ],
 
     'settings_page' => [

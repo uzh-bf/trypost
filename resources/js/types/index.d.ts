@@ -9,6 +9,7 @@ import type {
     TimeFormat,
     WeekStart,
 } from '@/preferences';
+import type { ScrollChangelogEntries, SharedChangelog } from '@/types/changelog';
 import type { AuthPlan, Features, PlanOption } from '@/types/plan';
 
 export type {
@@ -91,7 +92,7 @@ export interface CanvaPresetOption {
 }
 
 export interface MediaSourceOption {
-    source: 'google_drive' | 'google_photos' | 'canva' | 'unsplash';
+    source: 'google_drive' | 'google_photos' | 'canva' | 'giphy' | 'unsplash';
     label: string;
     config: Record<string, string>;
     presets?: CanvaPresetOption[];
@@ -132,13 +133,20 @@ export interface SharedData {
     plans?: PlanOption[];
     mediaSources?: { menu: MediaSourceOption[] } | null;
     referralSources?: string[] | null;
+    mcpPrompt?: { mcp_url: string } | null;
+    changelog?: SharedChangelog | null;
+    changelogEntries?: ScrollChangelogEntries;
     mediaUploadLimits?: MediaUploadLimits | null;
+    toursEnabled?: boolean;
     [key: string]: unknown;
 }
 
 export type AppPageProps<
     T extends Record<string, unknown> = Record<string, unknown>,
 > = T & SharedData;
+
+/** A provider people sign in with besides their password. */
+export type SocialProvider = 'google' | 'github';
 
 export interface User {
     id: string;

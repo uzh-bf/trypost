@@ -32,12 +32,14 @@ use App\Models\Workspace;
 use App\Services\Post\MediaAttacher;
 use App\Services\Repurpose\CaptionAdapter;
 use App\Services\Social\ContentSanitizer;
+use App\Services\Social\Discord\DiscordClient;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
+use Mockery\MockInterface;
 
 beforeEach(function () {
     Queue::fake([BootstrapAccountAnalytics::class, CollectAccountDailySnapshot::class]);
@@ -142,6 +144,26 @@ test('destination meta is carried onto the post', function () {
     expect($tiktokPost->meta)->toEqual(['privacy_level' => PrivacyLevel::PublicToEveryone->value]);
 });
 
+test('a destination stored with null meta creates its post with empty meta', function () {
+    Bus::fake([PublishPost::class]);
+    fakeVideoDownload();
+
+    $item = repurposeWithTwoDestinations();
+    $destinations = $item->repurpose->destinations;
+    data_set($destinations, '1.meta', null);
+    $item->repurpose->update(['destinations' => $destinations]);
+
+    processItem($item->fresh());
+
+    $youtubePost = Post::query()
+        ->where('repurpose_item_id', $item->id)
+        ->where('platform', Platform::YouTube)
+        ->sole();
+
+    expect($item->fresh()->status)->toBe(ItemStatus::Published)
+        ->and($youtubePost->meta)->toBe([]);
+});
+
 test('a caption over a destination limit is shortened for that post only', function () {
     Bus::fake([PublishPost::class]);
     fakeVideoDownload();
@@ -156,8 +178,8 @@ test('a caption over a destination limit is shortened for that post only', funct
         ->get()
         ->mapWithKeys(fn (Post $post) => [$post->platform->value => $post->content]);
 
-    expect(Platform::TikTok->contentOverflow($captions[Platform::TikTok->value]))->toBe(0)
-        ->and(Platform::YouTube->contentOverflow($captions[Platform::YouTube->value]))->toBe(0)
+    expect(mb_strlen($captions[Platform::TikTok->value]))->toBeLessThanOrEqual(Platform::TikTok->maxContentLength())
+        ->and(mb_strlen($captions[Platform::YouTube->value]))->toBeLessThanOrEqual(Platform::YouTube->maxContentLength())
         ->and(mb_strlen($captions[Platform::YouTube->value]))
         ->toBeGreaterThan(mb_strlen($captions[Platform::TikTok->value]));
 });
@@ -210,7 +232,24 @@ test('a mastodon caption leaves room for the content warning', function () {
     $caption = repurposedCaption($item);
 
     expect(mb_strlen($caption))->toBeGreaterThan(300)
-        ->and($account->contentOverflow($caption, Platform::Mastodon->reservedLength(['spoiler_text' => $warning])))->toBe(0);
+        ->and(mb_strlen($caption) + Platform::Mastodon->reservedLength(['spoiler_text' => $warning]))->toBeLessThanOrEqual($account->maxContentLength());
+});
+
+test('a discord destination stores the channel name from the cached list, not the one it was saved with', function () {
+    Bus::fake([PublishPost::class]);
+    fakeVideoDownload();
+    $this->mock(DiscordClient::class, function (MockInterface $client): void {
+        $client->shouldReceive('cachedChannels')->andReturn([['id' => '111', 'name' => 'general']]);
+        $client->shouldNotReceive('channels');
+    });
+
+    $account = SocialAccount::factory()->create(['platform' => Platform::Discord, 'platform_user_id' => '999']);
+    $item = repurposeItemTo($account, ['channel_id' => '111', 'channel_name' => 'sent-by-client']);
+
+    processItem($item);
+
+    expect(Post::query()->where('repurpose_item_id', $item->id)->sole()->meta)
+        ->toEqual(['channel_id' => '111', 'channel_name' => 'general']);
 });
 
 test('a failed download throws so the job retries, leaving no post behind', function () {

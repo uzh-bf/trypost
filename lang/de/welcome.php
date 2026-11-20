@@ -15,6 +15,7 @@ return [
     'steps' => [
         'persona' => 'Über dich',
         'goals' => 'Deine Ziele',
+        'software' => 'Aktuelles Tool',
         'plan' => 'Tarif',
     ],
     'personas' => [
@@ -39,6 +40,14 @@ return [
         'manage_clients' => 'Marken oder Kunden verwalten',
         'other' => 'Etwas anderes',
     ],
-    'plan_title' => 'Wähle deinen Tarif',
-    'plan_description' => 'Beide Pläne haben dieselben Funktionen. Der Unterschied ist die Anzahl der Workspaces, und du kannst jederzeit wechseln.',
+    'software_title' => 'Welches Tool nutzt du heute?',
+    'software' => [
+        'none' => 'Ich nutze noch keins',
+        'other' => 'Anderes',
+    ],
+    'plan_title' => 'Aktiviere dein Konto',
+    'plan_description' => 'Verbinde deine Kanäle und plane noch heute deinen ersten Post.',
+    'plan_terms' => 'Danach :price/Monat. Jederzeit kündbar',
+    'plan_checkout_button' => 'Mein Konto aktivieren',
+    'plan_cancel_anytime' => 'Jederzeit kündbar',
 ];

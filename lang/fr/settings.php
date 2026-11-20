@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 return [
     'title' => 'Paramètres',
     'description' => 'Gérez votre profil et les paramètres de votre compte',
@@ -9,13 +11,11 @@ return [
         'groups' => [
             'personal' => 'Personnel',
             'workspace' => 'Espace de travail',
-            'features' => 'Fonctionnalités',
-            'developers' => 'Développeurs',
-            'account' => 'Compte',
+            'content' => 'Contenu',
+            'integrations' => 'Intégrations',
         ],
         'items' => [
             'profile' => 'Profil',
-            'authentication' => 'Authentification',
             'notifications' => 'Notifications',
             'preferences' => 'Préférences',
             'general' => 'Général',
@@ -24,7 +24,7 @@ return [
             'signatures' => 'Signatures',
             'labels' => 'Étiquettes',
             'webhooks' => 'Webhooks',
-            'api_keys' => 'Clés API',
+            'api_keys' => 'API',
             'mcp' => 'MCP',
             'billing' => 'Facturation',
         ],
@@ -41,7 +41,7 @@ return [
         'account_disconnected' => 'Compte déconnecté',
         'account_disconnected_description' => 'Recevez un e-mail lorsqu\'un compte social est déconnecté',
         'post_note_added' => 'Nouvelle note sur une publication',
-        'post_note_added_description' => 'Recevoir un e-mail quand un membre de l\'équipe ajoute une note à une publication',
+        'post_note_added_description' => 'Recevoir un e-mail quand un membre de l\'équipe vous mentionne dans une note ou ajoute une note à une publication que vous avez créée ou commentée',
         'collaboration' => 'Collaboration',
         'collaboration_description' => 'Recevez des e-mails sur les demandes d\'approbation et les publications approuvées ou refusées',
         'save_failed' => 'Impossible d’enregistrer les préférences de notification. Veuillez réessayer.',
@@ -100,27 +100,23 @@ return [
         'resend_verification' => 'Cliquez ici pour renvoyer l\'e-mail de vérification.',
         'verification_sent' => 'Un nouveau lien de vérification a été envoyé à votre adresse e-mail.',
         'save' => 'Enregistrer',
-    ],
-
-    'authentication' => [
-        'title' => 'Authentification',
-        'page_title' => 'Paramètres d\'authentification',
+        'tabs' => [
+            'profile' => 'Profil',
+            'login' => 'Connexion',
+            'sessions' => 'Sessions',
+        ],
         'sessions' => [
             'title' => 'Sessions actives',
             'description' => 'Si vous remarquez quelque chose de suspect, déconnectez les autres appareils.',
             'unknown_browser' => 'Navigateur inconnu',
-            'unknown_ip' => 'IP inconnue',
             'on' => 'le',
             'active_now' => 'Actif maintenant',
+            'last_activity' => 'Dernière activité :time',
             'log_out_others' => 'Déconnecter les autres appareils',
             'modal_title' => 'Déconnecter les autres appareils',
-            'modal_description_password' => 'Saisissez votre mot de passe actuel pour confirmer que vous souhaitez déconnecter les autres sessions de navigateur.',
-            'modal_description_email' => 'Saisissez votre adresse e-mail pour confirmer que vous souhaitez déconnecter les autres sessions de navigateur.',
-            'password_placeholder' => 'Mot de passe actuel',
-            'email_placeholder' => 'L\'e-mail de votre compte',
+            'modal_description' => 'Tous les autres appareils connectés à votre compte seront déconnectés. Cette session reste active.',
             'cancel' => 'Annuler',
             'submit' => 'Déconnecter les autres appareils',
-            'email_mismatch' => 'L\'adresse e-mail ne correspond pas à votre compte.',
             'flash_logged_out' => 'Vous avez été déconnecté des autres appareils.',
         ],
         'password' => [

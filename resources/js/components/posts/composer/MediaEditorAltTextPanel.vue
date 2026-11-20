@@ -13,6 +13,8 @@ import type { AppPageProps } from '@/types';
 
 const props = defineProps<{
     mediaId: string;
+    /** Whether the AI can write the alt text: images only, never a video. */
+    generates: boolean;
 }>();
 
 const edit = defineModel<MediaEdit>('edit', { required: true });
@@ -80,6 +82,7 @@ const generate = async (): Promise<void> => {
             :disabled="generating"
         />
         <Button
+            v-if="generates"
             type="button"
             variant="outline"
             class="w-full"

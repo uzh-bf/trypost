@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 return [
     'title' => 'Configurações',
     'description' => 'Gerencie seu perfil e configurações da conta',
@@ -9,13 +11,11 @@ return [
         'groups' => [
             'personal' => 'Pessoal',
             'workspace' => 'Workspace',
-            'features' => 'Recursos',
-            'developers' => 'Desenvolvedores',
-            'account' => 'Conta',
+            'content' => 'Conteúdo',
+            'integrations' => 'Integrações',
         ],
         'items' => [
             'profile' => 'Perfil',
-            'authentication' => 'Autenticação',
             'notifications' => 'Notificações',
             'preferences' => 'Preferências',
             'general' => 'Geral',
@@ -24,7 +24,7 @@ return [
             'signatures' => 'Assinaturas',
             'labels' => 'Etiquetas',
             'webhooks' => 'Webhooks',
-            'api_keys' => 'API Keys',
+            'api_keys' => 'API',
             'mcp' => 'MCP',
             'billing' => 'Cobrança',
         ],
@@ -41,7 +41,7 @@ return [
         'account_disconnected' => 'Conta desconectada',
         'account_disconnected_description' => 'Receber um e-mail quando uma conta social for desconectada',
         'post_note_added' => 'Nova nota em uma publicação',
-        'post_note_added_description' => 'Receber um e-mail quando um membro da equipe adicionar uma nota a uma publicação',
+        'post_note_added_description' => 'Receber um e-mail quando alguém da equipe mencionar você em uma nota ou adicionar uma nota a uma publicação que você criou ou comentou',
         'collaboration' => 'Colaboração',
         'collaboration_description' => 'Receba e-mails sobre pedidos de aprovação e posts aprovados ou rejeitados',
         'save_failed' => 'Não foi possível salvar as preferências de notificações. Tente novamente.',
@@ -100,27 +100,23 @@ return [
         'resend_verification' => 'Clique aqui para reenviar o e-mail de verificação.',
         'verification_sent' => 'Um novo link de verificação foi enviado para seu endereço de e-mail.',
         'save' => 'Salvar',
-    ],
-
-    'authentication' => [
-        'title' => 'Autenticação',
-        'page_title' => 'Configurações de autenticação',
+        'tabs' => [
+            'profile' => 'Perfil',
+            'login' => 'Senha e login',
+            'sessions' => 'Sessões',
+        ],
         'sessions' => [
             'title' => 'Sessões ativas',
             'description' => 'Se você notar algo suspeito, encerre as sessões em outros dispositivos.',
             'unknown_browser' => 'Navegador desconhecido',
-            'unknown_ip' => 'IP desconhecido',
             'on' => 'em',
             'active_now' => 'Ativa agora',
+            'last_activity' => 'Última atividade :time',
             'log_out_others' => 'Encerrar outras sessões',
             'modal_title' => 'Encerrar outras sessões',
-            'modal_description_password' => 'Digite sua senha atual para confirmar o encerramento das outras sessões.',
-            'modal_description_email' => 'Digite seu e-mail para confirmar o encerramento das outras sessões.',
-            'password_placeholder' => 'Senha atual',
-            'email_placeholder' => 'Seu e-mail',
+            'modal_description' => 'Todos os outros dispositivos com acesso à sua conta serão desconectados. Esta sessão continua ativa.',
             'cancel' => 'Cancelar',
             'submit' => 'Encerrar outras sessões',
-            'email_mismatch' => 'O e-mail não corresponde à sua conta.',
             'flash_logged_out' => 'Outras sessões foram encerradas.',
         ],
         'password' => [

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 return [
     'title' => 'Χρέωση',
 
@@ -12,7 +14,6 @@ return [
     'subscribe' => [
         'billed_monthly' => 'Μηνιαία χρέωση',
         'prices' => [
-            'first_month' => '$1',
             'socials' => ['monthly' => '$19', 'yearly_per_month' => '$15.83', 'yearly' => '$190'],
             'workspaces' => ['monthly' => '$99', 'yearly_per_month' => '$82.50', 'yearly' => '$990'],
         ],
@@ -24,6 +25,7 @@ return [
         'yearly' => 'Ετήσια',
         'save_two_months' => '2 μήνες δωρεάν',
         'per_month' => '/μήνα',
+        'per_year' => '/έτος',
         'workspaces_one' => 'Ένα workspace',
         'workspaces_unlimited' => 'Απεριόριστα workspaces',
         'workspaces_tooltip' => 'Ένα workspace είναι ένα brand ή ένας πελάτης, ξεχωριστά από τα υπόλοιπα: με δικούς του λογαριασμούς social, υπογραφές, ετικέτες, analytics, δικαιώματα μελών και σύνδεση MCP.',
@@ -33,54 +35,70 @@ return [
         'select' => 'Επιλέξτε :plan',
         'upgrade' => 'Αναβάθμιση σε :plan',
         'downgrade' => 'Υποβάθμιση σε :plan',
-        'start_first_month' => 'Ξεκίνα με :price',
-        'per_first_month' => '/πρώτος μήνας',
-        'then_monthly' => 'Μετά :price/μήνα',
         'billed_yearly_total' => 'Ετήσια χρέωση · :price (2 μήνες δωρεάν)',
         'socials_tagline' => 'Ιδανικό για creators και μικρά brands.',
         'workspaces_tagline' => 'Ιδανικό για agencies και μεγαλύτερες επιχειρήσεις.',
         'everything_included' => 'Όλα περιλαμβάνονται',
         'features' => [
             'networks_all' => 'Όλα τα κοινωνικά δίκτυα περιλαμβάνονται',
-            'networks_all_tooltip' => 'Μπορείτε να δημοσιεύετε σε όλα αυτά τα δίκτυα.',
-            'accounts_unlimited' => 'Απεριόριστοι λογαριασμοί social',
+            'networks_all_tooltip' => 'Δημοσιεύστε σε όλα από ένα σημείο.',
+            'accounts_unlimited' => 'Απεριόριστοι λογαριασμοί',
             'accounts_unlimited_tooltip' => 'Συνδέστε όσους λογαριασμούς θέλετε, ακόμη και πολλούς από το ίδιο δίκτυο. Τρία Instagram, για παράδειγμα.',
-            'calendar' => 'Ημερολόγιο: μήνας και εβδομάδα',
-            'calendar_tooltip' => 'Δείτε όλο τον μήνα με μια ματιά: τι είναι σχεδιασμένο, προγραμματισμένο και ήδη δημοσιευμένο. Περάστε σε εβδομάδα όταν χρειάζεστε λεπτομέρεια.',
-            'ai' => 'TryPost Copilot',
-            'ai_tooltip' => 'Ο βοηθός AI σας για να γράφετε και να ελέγχετε posts.',
-            'mcp' => 'MCP: δημοσίευση από Claude, ChatGPT ή Grok',
-            'mcp_tooltip' => 'Συνδέστε το Claude, το ChatGPT ή το Grok στο workspace σας. Ζητήστε του να δημιουργεί και να προγραμματίζει posts, να φέρνει μετρήσεις, να βρίσκει τι πήγε καλύτερα και να σχεδιάζει το επόμενο περιεχόμενο από τα δικά σας δεδομένα.',
-            'repurpose' => 'Repurpose: ένα post γίνεται πολλά',
-            'repurpose_tooltip' => 'Επιλέξτε έναν λογαριασμό-πηγή. Κάθε νέο post που δημοσιεύετε εκεί αναδημοσιεύεται αυτόματα στα άλλα σας δίκτυα. Δεν χρειάζεται να ανοίξετε το TryPost.',
-            'analytics' => 'Analytics',
-            'analytics_tooltip' => 'Δείτε μετρήσεις όπως εμφανίσεις, απήχηση, likes και σχόλια για κάθε post και κάθε λογαριασμό, όλα σε ένα μέρος.',
-            'team' => 'Απεριόριστα μέλη',
+            'calendar' => 'Ημερολόγιο περιεχομένου',
+            'ideas' => 'Σχεδιασμός περιεχομένου',
+            'ideas_tooltip' => 'Σημειώστε τις ιδέες σας, οργανώστε τες σε ένα σημείο και κάντε τις καλύτερες περιεχόμενο όποτε θέλετε.',
+            'calendar_tooltip' => 'Δείτε όλα τα προγραμματισμένα και δημοσιευμένα posts σε ένα σημείο, ανά μήνα ή εβδομάδα.',
+            'ai' => 'Βοηθός γραφής AI',
+            'ai_tooltip' => 'Γράψτε, ξαναγράψτε και προσαρμόστε τον τόνο των posts σας με AI, στη γλώσσα σας.',
+            'mcp' => 'Χρησιμοποιήστε το TryPost από Claude ή ChatGPT',
+            'mcp_tooltip' => 'Συνδέστε το Claude, το ChatGPT ή άλλη AI. Ζητήστε της να δημιουργεί και να προγραμματίζει posts, να γεμίζει την ουρά, να οργανώνει ιδέες και να δείχνει την ανάπτυξή σας.',
+            'repurpose' => 'Αυτόματη αναδημοσίευση βίντεο',
+            'repurpose_tooltip' => 'Ανεβάσατε ένα βίντεο στο Instagram; Το TryPost το αναδημοσιεύει αυτόματα σε TikTok, YouTube, Facebook και στα άλλα δίκτυά σας.',
+            'analytics' => 'Προηγμένα στατιστικά',
+            'analytics_tooltip' => 'Δείτε όλα τα δίκτυά σας μαζί, όπως τους συνολικούς ακόλουθους, ή φιλτράρετε ανά δίκτυο και ανά post. Προβολές, απήχηση, likes, σχόλια και άλλα, για να ξέρετε τι αποδίδει.',
+            'team' => 'Απεριόριστα μέλη ομάδας',
             'team_tooltip' => 'Προσκαλέστε όσα άτομα θέλετε στην ομάδα σας, χωρίς επιπλέον κόστος. Ορίστε τι μπορεί να κάνει ο καθένας και εγκρίνετε τα posts πριν δημοσιευτούν.',
         ],
     ],
 
     'current_plan' => [
+        'statuses' => [
+            'active' => 'Ενεργό',
+            'trial' => 'Δωρεάν δοκιμή',
+            'cancelling' => 'Ακυρώθηκε',
+            'past_due' => 'Ληξιπρόθεσμο',
+        ],
         'change' => 'Αλλαγή πλάνου',
-        'price_monthly' => ':price/μήνα',
-        'price_yearly' => ':price/έτος',
+        'subscribe' => 'Εγγραφή τώρα',
         'trial_until' => 'Δοκιμαστική περίοδος έως :date',
-        'renews' => 'Ανανεώνεται αυτόματα',
         'cancelled' => 'Ακυρώθηκε, λήγει στις :date',
-        'workspaces_usage' => 'Workspaces: :count από :limit',
+        'discount_until' => 'Έκπτωση :discount έως :date',
+        'discount_forever' => 'Έκπτωση :discount σε κάθε πληρωμή',
+        'discount_once' => 'Έκπτωση :discount στην επόμενη πληρωμή',
     ],
 
     'subscription' => [
-        'title' => 'Μέθοδος πληρωμής',
+        'title' => 'Μέθοδοι πληρωμής',
+        'default' => 'Προεπιλογή',
         'description' => 'Ενημερώστε την κάρτα ή τα στοιχεία χρέωσης στο Stripe.',
         'no_payment_method' => 'Δεν υπάρχει καταχωρημένη μέθοδος πληρωμής ακόμη.',
         'expires_on' => 'Λήγει :month/:year',
         'manage_stripe' => 'Διαχείριση στο Stripe',
     ],
 
+    'tabs' => [
+        'plan' => 'Πλάνο',
+        'invoices' => 'Τιμολόγια',
+    ],
+
     'invoices' => [
-        'title' => 'Τιμολόγια',
-        'description' => 'Κατεβάστε τα προηγούμενα τιμολόγιά σας.',
+        'columns' => [
+            'date' => 'Ημερομηνία',
+            'amount' => 'Ποσό',
+            'status' => 'Κατάσταση',
+        ],
+        'empty_title' => 'Δεν υπάρχουν ακόμη τιμολόγια',
+        'empty_description' => 'Τα τιμολόγιά σας θα εμφανίζονται εδώ μετά την πρώτη σας πληρωμή.',
         'paid' => 'Πληρωμένο',
         'download' => 'Λήψη τιμολογίου',
     ],

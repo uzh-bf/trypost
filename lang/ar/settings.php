@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 return [
     'title' => 'الإعدادات',
     'description' => 'إدارة ملفك الشخصي وإعدادات حسابك',
@@ -9,13 +11,11 @@ return [
         'groups' => [
             'personal' => 'شخصي',
             'workspace' => 'مساحة العمل',
-            'features' => 'الميزات',
-            'developers' => 'المطورون',
-            'account' => 'الحساب',
+            'content' => 'المحتوى',
+            'integrations' => 'التكاملات',
         ],
         'items' => [
             'profile' => 'الملف الشخصي',
-            'authentication' => 'المصادقة',
             'notifications' => 'الإشعارات',
             'preferences' => 'التفضيلات',
             'general' => 'عام',
@@ -24,7 +24,7 @@ return [
             'signatures' => 'التوقيعات',
             'labels' => 'التسميات',
             'webhooks' => 'Webhooks',
-            'api_keys' => 'مفاتيح API',
+            'api_keys' => 'API',
             'mcp' => 'MCP',
             'billing' => 'الفوترة',
         ],
@@ -41,7 +41,7 @@ return [
         'account_disconnected' => 'تم فصل الحساب',
         'account_disconnected_description' => 'استلم بريدًا إلكترونيًا عند فصل حساب اجتماعي',
         'post_note_added' => 'ملاحظة جديدة على منشور',
-        'post_note_added_description' => 'تلقَّ بريدًا إلكترونيًا عندما يضيف أحد أعضاء الفريق ملاحظة إلى منشور',
+        'post_note_added_description' => 'تلقَّ بريدًا إلكترونيًا عندما يشير إليك أحد أعضاء الفريق في ملاحظة أو يضيف ملاحظة إلى منشور أنشأته أو علّقت عليه',
         'collaboration' => 'التعاون',
         'collaboration_description' => 'تلقَّ رسائل حول طلبات الموافقة والمنشورات المقبولة أو المرفوضة',
         'save_failed' => 'تعذّر حفظ تفضيلات الإشعارات. حاول مرة أخرى.',
@@ -100,27 +100,23 @@ return [
         'resend_verification' => 'انقر هنا لإعادة إرسال بريد التأكيد.',
         'verification_sent' => 'تم إرسال رابط تأكيد جديد إلى بريدك الإلكتروني.',
         'save' => 'حفظ',
-    ],
-
-    'authentication' => [
-        'title' => 'المصادقة',
-        'page_title' => 'إعدادات المصادقة',
+        'tabs' => [
+            'profile' => 'الملف الشخصي',
+            'login' => 'كلمة المرور وتسجيل الدخول',
+            'sessions' => 'الجلسات',
+        ],
         'sessions' => [
             'title' => 'الجلسات النشطة',
             'description' => 'إذا لاحظت أي شيء مريب، سجّل الخروج من الأجهزة الأخرى.',
             'unknown_browser' => 'متصفح غير معروف',
-            'unknown_ip' => 'عنوان IP غير معروف',
             'on' => 'على',
             'active_now' => 'نشط الآن',
+            'last_activity' => 'آخر نشاط :time',
             'log_out_others' => 'تسجيل الخروج من الأجهزة الأخرى',
             'modal_title' => 'تسجيل الخروج من الأجهزة الأخرى',
-            'modal_description_password' => 'أدخل كلمة المرور الحالية لتأكيد رغبتك في تسجيل الخروج من جلسات المتصفح الأخرى.',
-            'modal_description_email' => 'اكتب بريدك الإلكتروني لتأكيد رغبتك في تسجيل الخروج من جلسات المتصفح الأخرى.',
-            'password_placeholder' => 'كلمة المرور الحالية',
-            'email_placeholder' => 'بريد حسابك الإلكتروني',
+            'modal_description' => 'سيتم تسجيل الخروج من جميع الأجهزة الأخرى المتصلة بحسابك. تبقى هذه الجلسة نشطة.',
             'cancel' => 'إلغاء',
             'submit' => 'تسجيل الخروج من الأجهزة الأخرى',
-            'email_mismatch' => 'البريد الإلكتروني لا يطابق حسابك.',
             'flash_logged_out' => 'تم تسجيل خروجك من الأجهزة الأخرى.',
         ],
         'password' => [

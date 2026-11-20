@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 return [
     'title' => '설정',
     'description' => '프로필 및 계정 설정 관리',
@@ -9,13 +11,11 @@ return [
         'groups' => [
             'personal' => '개인',
             'workspace' => '워크스페이스',
-            'features' => '기능',
-            'developers' => '개발자',
-            'account' => '계정',
+            'content' => '콘텐츠',
+            'integrations' => '연동',
         ],
         'items' => [
             'profile' => '프로필',
-            'authentication' => '인증',
             'notifications' => '알림',
             'preferences' => '환경설정',
             'general' => '일반',
@@ -24,7 +24,7 @@ return [
             'signatures' => '서명',
             'labels' => '라벨',
             'webhooks' => '웹훅',
-            'api_keys' => 'API 키',
+            'api_keys' => 'API',
             'mcp' => 'MCP',
             'billing' => '결제',
         ],
@@ -41,7 +41,7 @@ return [
         'account_disconnected' => '계정 연결 해제됨',
         'account_disconnected_description' => '소셜 계정 연결이 해제되면 이메일을 받습니다',
         'post_note_added' => '게시물의 새 메모',
-        'post_note_added_description' => '팀원이 게시물에 메모를 추가하면 이메일을 받습니다',
+        'post_note_added_description' => '팀원이 메모에서 회원님을 언급하거나 회원님이 만들었거나 메모를 남긴 게시물에 메모를 추가하면 이메일을 받습니다',
         'collaboration' => '협업',
         'collaboration_description' => '승인 요청과 승인 또는 거절된 게시물에 대한 이메일 받기',
         'save_failed' => '알림 설정을 저장하지 못했습니다. 다시 시도해 주세요.',
@@ -100,27 +100,23 @@ return [
         'resend_verification' => '인증 이메일을 다시 보내려면 여기를 클릭하세요.',
         'verification_sent' => '이메일 주소로 새 인증 링크를 보냈습니다.',
         'save' => '저장',
-    ],
-
-    'authentication' => [
-        'title' => '인증',
-        'page_title' => '인증 설정',
+        'tabs' => [
+            'profile' => '프로필',
+            'login' => '비밀번호 및 로그인',
+            'sessions' => '세션',
+        ],
         'sessions' => [
             'title' => '활성 세션',
             'description' => '의심스러운 점이 발견되면 다른 기기에서 로그아웃하세요.',
             'unknown_browser' => '알 수 없는 브라우저',
-            'unknown_ip' => '알 수 없는 IP',
             'on' => '·',
             'active_now' => '현재 활성',
+            'last_activity' => '마지막 활동: :time',
             'log_out_others' => '다른 기기에서 로그아웃',
             'modal_title' => '다른 기기에서 로그아웃',
-            'modal_description_password' => '다른 브라우저 세션에서 로그아웃하려면 현재 비밀번호를 입력하여 확인하세요.',
-            'modal_description_email' => '다른 브라우저 세션에서 로그아웃하려면 이메일 주소를 입력하여 확인하세요.',
-            'password_placeholder' => '현재 비밀번호',
-            'email_placeholder' => '계정 이메일',
+            'modal_description' => '계정에 로그인된 다른 모든 기기에서 로그아웃됩니다. 이 세션은 그대로 유지됩니다.',
             'cancel' => '취소',
             'submit' => '다른 기기에서 로그아웃',
-            'email_mismatch' => '이메일 주소가 계정과 일치하지 않습니다.',
             'flash_logged_out' => '다른 기기에서 로그아웃되었습니다.',
         ],
         'password' => [

@@ -7,6 +7,8 @@ return [
     'description' => 'Verwalte die Kanäle dieses Workspace.',
     'connect' => 'Kanal verbinden',
     'settings' => 'Kanaleinstellungen',
+    'manage' => 'Kanäle verwalten',
+    'set_goal' => 'Veröffentlichungsziel festlegen',
     'publish' => 'Veröffentlichen',
     'insights' => 'Insights',
     'new_post' => 'Neuer Beitrag in diesem Kanal',
@@ -16,14 +18,13 @@ return [
     'connection_lost_hint' => 'Verbinde diesen Kanal erneut, um weiter zu veröffentlichen.',
     'reconnect' => 'Erneut verbinden',
     'refresh_connection' => 'Verbindung aktualisieren',
+    'link_facebook_page' => 'Mit einer Facebook-Seite verknüpfen',
     'view_profile' => 'Profil ansehen',
     'disconnect' => 'Trennen',
     'actions' => 'Kanalaktionen',
 
     'reorder' => [
         'handle' => ':name per Drag-and-drop verschieben',
-        'move_up' => 'Nach oben',
-        'move_down' => 'Nach unten',
         'failed' => 'Deine Kanäle konnten nicht neu sortiert werden. Versuche es erneut.',
         'stale' => 'Deine Kanäle haben sich seit dem Laden der Seite geändert. Lade die Seite neu und versuche es erneut.',
     ],
@@ -169,6 +170,25 @@ return [
         'description' => 'Dadurch werden alle Beiträge dieses Kanals in TryPost gelöscht, einschließlich Entwürfen, geplanten Beiträgen und dem Veröffentlichungsverlauf. Beiträge, die bereits im Netzwerk sind, bleiben dort.',
         'keyword' => 'trennen',
         'cancel' => 'Abbrechen',
+    ],
+
+    'list' => [
+        'search' => 'Nach Name, @Benutzername oder Netzwerk suchen',
+        'networks' => 'Netzwerke',
+        'networks_search' => 'Netzwerke suchen',
+        'no_networks' => 'Keine Netzwerke gefunden',
+        'columns' => [
+            'channel' => 'Kanal',
+            'timezone' => 'Zeitzone',
+            'posting_times' => 'Zeiten',
+            'this_week' => 'Diese Woche',
+        ],
+        'posting_times_per_week' => ':count pro Woche',
+        'no_posting_times' => 'Keine Zeiten',
+        'no_results' => 'Kein Kanal passt zu deiner Suche.',
+        'connection_lost' => 'Dieser Kanal hat die Verbindung verloren',
+        'settings' => 'Einstellungen',
+        'more_actions' => 'Weitere Aktionen',
     ],
 
     'settings_page' => [

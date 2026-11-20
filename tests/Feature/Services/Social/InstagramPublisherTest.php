@@ -142,6 +142,31 @@ test('instagram publisher can publish reel', function () {
     });
 });
 
+test('instagram publisher sends no alt text on a reel, which takes none', function () {
+    $this->post->update(['content_type' => ContentType::InstagramReel]);
+    $this->post->update(['media' => [[
+        'id' => 'test-media-video',
+        'path' => 'media/2026-01/test-video.mp4',
+        'url' => 'https://example.com/media/2026-01/test-video.mp4',
+        'mime_type' => 'video/mp4',
+        'original_filename' => 'test.mp4',
+        'meta' => ['alt_text' => 'a cyclist crossing a bridge'],
+    ]]]);
+
+    Http::fake([
+        'https://graph.instagram.com/v25.0/ig_123456789/media' => Http::response(['id' => 'container-123'], 200),
+        'https://graph.instagram.com/v25.0/container-123*' => Http::response(['status_code' => 'FINISHED'], 200),
+        'https://graph.instagram.com/v25.0/ig_123456789/media_publish' => Http::response(['id' => 'reel-123456789'], 200),
+        'https://graph.instagram.com/v25.0/reel-123456789*' => Http::response(['permalink' => 'https://www.instagram.com/reel/ABC123/'], 200),
+    ]);
+
+    $this->publisher->publish($this->post);
+
+    Http::assertSent(fn ($request) => str_ends_with($request->url(), '/ig_123456789/media')
+        && data_get($request->data(), 'media_type') === 'REELS'
+        && ! array_key_exists('alt_text', $request->data()));
+});
+
 test('instagram publisher fits an image story to 9:16 and posts the hosted copy', function () {
     Storage::fake();
     $this->post->update(['content_type' => ContentType::InstagramStory]);
@@ -197,6 +222,42 @@ test('instagram publisher fits an image story to 9:16 and posts the hosted copy'
 
         return str_contains($imageUrl, 'social-crops/') && ! str_contains($imageUrl, 'example.com');
     });
+});
+
+test('instagram publisher sends no collaborators on a story that still has them in its meta', function () {
+    Storage::fake();
+    $this->post->update([
+        'content_type' => ContentType::InstagramStory,
+        'meta' => ['collaborators' => ['alice', 'bob']],
+        'media' => [[
+            'id' => 'test-media-story',
+            'path' => 'media/2026-01/story.jpg',
+            'url' => 'https://example.com/media/2026-01/story.jpg',
+            'mime_type' => 'image/jpeg',
+            'original_filename' => 'story.jpg',
+        ]],
+    ]);
+    $optimizer = Mockery::mock(MediaOptimizer::class);
+    $optimizer->shouldReceive('fitToCanvas')->andReturnUsing(function (string $tempFile): string {
+        $out = tempnam(sys_get_temp_dir(), 'ig_fit_');
+        copy($tempFile, $out);
+
+        return $out;
+    });
+    app()->instance(MediaOptimizer::class, $optimizer);
+
+    Http::fake([
+        'https://graph.instagram.com/v25.0/ig_123456789/media' => Http::response(['id' => 'story-container-123'], 200),
+        'https://graph.instagram.com/v25.0/story-container-123*' => Http::response(['status_code' => 'FINISHED'], 200),
+        'https://graph.instagram.com/v25.0/ig_123456789/media_publish' => Http::response(['id' => 'story-123456789'], 200),
+        'https://graph.instagram.com/v25.0/story-123456789*' => Http::response(['permalink' => 'https://www.instagram.com/stories/testuser/123/'], 200),
+        '*' => Http::response(file_get_contents(__DIR__.'/../../../fixtures/1x1.png'), 200, ['Content-Type' => 'image/png']),
+    ]);
+
+    expect($this->publisher->publish($this->post)['id'])->toBe('story-123456789');
+
+    Http::assertSent(fn (Request $request): bool => str_ends_with($request->url(), '/ig_123456789/media'));
+    Http::assertNotSent(fn (Request $request): bool => data_get($request->data(), 'collaborators') !== null);
 });
 
 test('instagram publisher fits a real off-ratio story image to a 1080x1920 jpeg', function () {
@@ -1569,7 +1630,7 @@ test('instagram facebook publisher recovers a published container on graph.faceb
     ])->save();
     $this->post->setRelation('socialAccount', $account);
 
-    $graph = (string) config('trypost.platforms.instagram-facebook.graph_api');
+    $graph = config('trypost.platforms.instagram-facebook.graph_api');
 
     Http::fake(function (Request $request) use ($graph) {
         expect($request->url())->toStartWith($graph)
@@ -2323,7 +2384,7 @@ test('instagram reel sends the chosen cover frame as thumb_offset in millisecond
             'meta' => array_filter(['duration' => 10, 'cover_offset_ms' => $coverOffsetMs], fn (mixed $value): bool => $value !== null),
         ]],
     ]);
-    $graph = Platform::Instagram->instagramGraphBaseUrl();
+    $graph = Platform::Instagram->graphApiUrl();
 
     Http::fake([
         "{$graph}/ig_123456789/media" => Http::response(['id' => 'container-123']),
@@ -2341,6 +2402,118 @@ test('instagram reel sends the chosen cover frame as thumb_offset in millisecond
     'offset of 1.5 s' => [1500],
     'no offset' => [null],
 ]);
+
+/**
+ * @param  array<string, mixed>  $cover
+ * @return array<string, mixed>
+ */
+function instagramVideoWithCover(array $cover): array
+{
+    return [
+        'id' => 'test-media-video',
+        'path' => 'media/2026-01/test-video.mp4',
+        'url' => 'https://example.com/media/2026-01/test-video.mp4',
+        'mime_type' => 'video/mp4',
+        'original_filename' => 'test.mp4',
+        'meta' => ['duration' => 10, 'cover_offset_ms' => 1500, 'cover' => [
+            'id' => 'test-media-cover',
+            'path' => 'media/2026-01/cover.jpg',
+            'url' => 'https://example.com/media/2026-01/cover.jpg',
+            'type' => 'image',
+            'mime_type' => 'image/jpeg',
+            'size' => 200000,
+            ...$cover,
+        ]],
+    ];
+}
+
+function fakeInstagramReelPublish(): string
+{
+    $graph = Platform::Instagram->graphApiUrl();
+
+    Http::fake([
+        "{$graph}/ig_123456789/media" => Http::response(['id' => 'container-123']),
+        "{$graph}/container-123*" => Http::response(['status_code' => 'FINISHED']),
+        "{$graph}/ig_123456789/media_publish" => Http::response(['id' => 'reel-123']),
+        "{$graph}/reel-123*" => Http::response(['permalink' => 'https://www.instagram.com/reel/ABC/']),
+        '*' => Http::response(fakeJpegBytes(1080, 1920), 200, ['Content-Type' => 'image/jpeg']),
+    ]);
+
+    return "{$graph}/ig_123456789/media";
+}
+
+test('instagram reel sends an uploaded jpeg cover as cover_url instead of the frame', function () {
+    $this->post->update(['content_type' => ContentType::InstagramReel, 'media' => [instagramVideoWithCover([])]]);
+    $containerUrl = fakeInstagramReelPublish();
+
+    $this->publisher->publish($this->post);
+
+    Http::assertSent(fn (Request $request): bool => $request->url() === $containerUrl
+        && data_get($request->data(), 'cover_url') === 'https://example.com/media/2026-01/cover.jpg'
+        && data_get($request->data(), 'thumb_offset') === null);
+});
+
+test('instagram reel re-encodes a cover that is not a jpeg of up to 8 mb', function (array $cover) {
+    Storage::fake();
+    $this->post->update(['content_type' => ContentType::InstagramReel, 'media' => [instagramVideoWithCover($cover)]]);
+    $containerUrl = fakeInstagramReelPublish();
+
+    $this->publisher->publish($this->post);
+
+    $hosted = collect(Storage::allFiles())->first(fn (string $path): bool => str_starts_with($path, InstagramPublisher::CROP_DIRECTORY.'/'));
+
+    expect($hosted)->toEndWith('.jpg');
+    Http::assertSent(fn (Request $request): bool => $request->url() === $containerUrl
+        && data_get($request->data(), 'cover_url') === Storage::url($hosted));
+})->with([
+    'a png' => [['path' => 'media/2026-01/cover.png', 'url' => 'https://example.com/media/2026-01/cover.png', 'mime_type' => 'image/png']],
+    'a jpeg over 8 mb' => [['size' => 9 * 1024 * 1024]],
+]);
+
+test('instagram reel publishes with the picked frame when the cover cannot be made a jpeg', function () {
+    Storage::fake();
+    $this->post->update(['content_type' => ContentType::InstagramReel, 'media' => [instagramVideoWithCover(['mime_type' => 'image/png', 'url' => 'https://example.com/media/2026-01/cover.png'])]]);
+    $graph = Platform::Instagram->graphApiUrl();
+    Http::fake([
+        "{$graph}/ig_123456789/media" => Http::response(['id' => 'container-123']),
+        "{$graph}/container-123*" => Http::response(['status_code' => 'FINISHED']),
+        "{$graph}/ig_123456789/media_publish" => Http::response(['id' => 'reel-123']),
+        "{$graph}/reel-123*" => Http::response(['permalink' => 'https://www.instagram.com/reel/ABC/']),
+        '*' => Http::response('not an image', 200, ['Content-Type' => 'image/png']),
+    ]);
+
+    $result = $this->publisher->publish($this->post);
+
+    expect($result['id'])->toBe('reel-123');
+    Http::assertSent(fn (Request $request): bool => $request->url() === "{$graph}/ig_123456789/media"
+        && data_get($request->data(), 'cover_url') === null
+        && data_get($request->data(), 'thumb_offset') === 1500);
+});
+
+test('instagram reel sends a frame cover as its time, not as its screenshot', function () {
+    $this->post->update(['content_type' => ContentType::InstagramReel, 'media' => [instagramVideoWithCover([])]]);
+    $media = $this->post->media;
+    $media[0]['meta']['cover_source'] = 'frame';
+    $this->post->update(['media' => $media]);
+    $containerUrl = fakeInstagramReelPublish();
+
+    $this->publisher->publish($this->post);
+
+    Http::assertSent(fn (Request $request): bool => $request->url() === $containerUrl
+        && data_get($request->data(), 'cover_url') === null
+        && data_get($request->data(), 'thumb_offset') === 1500);
+});
+
+test('a feed video keeps its cover frame, since only a reel takes a cover image', function () {
+    $this->post->update(['content_type' => ContentType::InstagramFeed, 'media' => [instagramVideoWithCover([])]]);
+    $containerUrl = fakeInstagramReelPublish();
+
+    $this->publisher->publish($this->post);
+
+    Http::assertSent(fn (Request $request): bool => $request->url() === $containerUrl
+        && data_get($request->data(), 'cover_url') === null
+        && data_get($request->data(), 'thumb_offset') === 1500);
+});
 
 test('instagram carousel video child sends its cover frame as thumb_offset', function () {
     $this->post->update([
@@ -2362,7 +2535,7 @@ test('instagram carousel video child sends its cover frame as thumb_offset', fun
             ],
         ],
     ]);
-    $graph = Platform::Instagram->instagramGraphBaseUrl();
+    $graph = Platform::Instagram->graphApiUrl();
 
     Http::fake([
         "{$graph}/ig_123456789/media" => Http::sequence()
@@ -2530,4 +2703,196 @@ test('an instagram story is not measured against the caption length', function (
     $this->publisher->publish($this->post->fresh());
 
     Http::assertSent(fn (Request $request): bool => str_ends_with($request->url(), '/ig_123456789/media_publish'));
+});
+
+test('instagram publisher sends collaborators and a trial reel on a reel', function () {
+    $this->post->update([
+        'content_type' => ContentType::InstagramReel,
+        'meta' => [
+            'collaborators' => ['@alice', 'bob'],
+            'trial_graduation' => 'SS_PERFORMANCE',
+        ],
+        'media' => instagramVideo(),
+    ]);
+    fakeInstagramReelFlow();
+
+    $this->publisher->publish($this->post);
+
+    Http::assertSent(fn (Request $request): bool => str_ends_with($request->url(), '/ig_123456789/media')
+        && data_get($request->data(), 'media_type') === 'REELS'
+        && json_decode((string) data_get($request->data(), 'collaborators'), true) === ['alice', 'bob']
+        && json_decode((string) data_get($request->data(), 'trial_params'), true) === ['graduation_strategy' => 'SS_PERFORMANCE']
+        && data_get($request->data(), 'audio_configuration') === null);
+});
+
+test('instagram publisher fails a reel with music on an account connected through Instagram Login', function () {
+    $this->post->update([
+        'content_type' => ContentType::InstagramReel,
+        'meta' => ['audio' => ['id' => '1234567890']],
+        'media' => instagramVideo(),
+    ]);
+    fakeInstagramReelFlow();
+
+    expect(fn () => $this->publisher->publish($this->post))
+        ->toThrow(function (InstagramPublishException $exception): void {
+            expect($exception->getMessage())->toBe(__('posts.form.instagram.music.requires_facebook'))
+                ->and($exception->category)->toBe(ErrorCategory::ContentPolicy);
+        });
+
+    Http::assertNothingSent();
+});
+
+test('a feed video with a leftover track on an account connected through Instagram Login publishes without music', function () {
+    $this->post->update([
+        'content_type' => ContentType::InstagramFeed,
+        'meta' => ['audio' => ['id' => '1234567890']],
+        'media' => instagramVideo(),
+    ]);
+    fakeInstagramReelFlow();
+
+    $this->publisher->publish($this->post->fresh());
+
+    Http::assertSent(fn (Request $request): bool => str_ends_with($request->url(), '/ig_123456789/media')
+        && data_get($request->data(), 'media_type') === 'REELS'
+        && ! array_key_exists('audio_configuration', $request->data()));
+    Http::assertSent(fn (Request $request): bool => str_ends_with($request->url(), '/ig_123456789/media_publish'));
+});
+
+test('instagram publisher attaches music to a reel of an account connected through Facebook', function (int|string $videoVolume) {
+    $account = SocialAccount::factory()->create([
+        'workspace_id' => $this->workspace->id,
+        'platform' => Platform::InstagramFacebook,
+        'platform_user_id' => 'igf_1',
+        'token_expires_at' => now()->addDays(60),
+    ]);
+    $post = Post::factory()->forAccount($account, ContentType::InstagramReel)->create([
+        'user_id' => $this->user->id,
+        'content' => 'With music',
+        'meta' => ['audio' => ['id' => '1234567890', 'title' => 'Song', 'video_volume' => $videoVolume]],
+        'media' => [[
+            'id' => 'test-media-video',
+            'path' => 'media/2026-01/test-video.mp4',
+            'url' => 'https://example.com/media/2026-01/test-video.mp4',
+            'mime_type' => 'video/mp4',
+            'original_filename' => 'test.mp4',
+        ]],
+    ]);
+    $post->setRelation('socialAccount', $account);
+    $graph = config('trypost.platforms.instagram-facebook.graph_api');
+
+    Http::fake([
+        "{$graph}/igf_1/media" => Http::response(['id' => 'container-9'], 200),
+        "{$graph}/container-9*" => Http::response(['status_code' => 'FINISHED'], 200),
+        "{$graph}/igf_1/media_publish" => Http::response(['id' => 'reel-9'], 200),
+        "{$graph}/reel-9*" => Http::response(['permalink' => 'https://www.instagram.com/reel/R9/'], 200),
+    ]);
+
+    $this->publisher->publish($post);
+
+    Http::assertSent(fn (Request $request): bool => str_ends_with($request->url(), '/igf_1/media')
+        && json_decode((string) data_get($request->data(), 'audio_configuration'), true) === ['audio_id' => '1234567890', 'video_volume' => 20]
+        && data_get($request->data(), 'collaborators') === null && data_get($request->data(), 'trial_params') === null);
+})->with(['volume as a number' => [20], 'volume as text' => ['20']]);
+
+test('instagram publisher sends collaborators on the carousel container only', function () {
+    $this->post->update([
+        'meta' => ['collaborators' => ['alice']],
+        'media' => collect(range(0, 1))->map(fn (int $i): array => [
+            'id' => "test-media-{$i}",
+            'path' => "media/2026-01/test-image-{$i}.jpg",
+            'url' => "https://example.com/media/2026-01/test-image-{$i}.jpg",
+            'mime_type' => 'image/jpeg',
+            'original_filename' => "test-{$i}.jpg",
+        ])->all(),
+    ]);
+
+    $graph = config('trypost.platforms.instagram.graph_api');
+
+    Http::fake([
+        "{$graph}/ig_123456789/media" => Http::sequence()
+            ->push(['id' => 'child-1'], 200)
+            ->push(['id' => 'child-2'], 200)
+            ->push(['id' => 'carousel-1'], 200),
+        "{$graph}/carousel-1*" => Http::response(['status_code' => 'FINISHED'], 200),
+        "{$graph}/ig_123456789/media_publish" => Http::response(['id' => 'post-1'], 200),
+        "{$graph}/post-1*" => Http::response(['permalink' => 'https://www.instagram.com/p/P1/'], 200),
+    ]);
+
+    $this->publisher->publish($this->post);
+
+    Http::assertSent(fn (Request $request): bool => data_get($request->data(), 'media_type') === 'CAROUSEL'
+        && json_decode((string) data_get($request->data(), 'collaborators'), true) === ['alice']);
+    Http::assertNotSent(fn (Request $request): bool => data_get($request->data(), 'is_carousel_item') === 'true'
+        && data_get($request->data(), 'collaborators') !== null);
+});
+
+test('instagram publisher sends no collaborators on a story', function () {
+    $this->post->update([
+        'content_type' => ContentType::InstagramStory,
+        'meta' => ['collaborators' => ['alice']],
+        'media' => [[
+            'id' => 'test-media-video',
+            'path' => 'media/2026-01/test-video.mp4',
+            'url' => 'https://example.com/media/2026-01/test-video.mp4',
+            'mime_type' => 'video/mp4',
+            'original_filename' => 'test.mp4',
+        ]],
+    ]);
+
+    fakeInstagramReelFlow();
+
+    $this->publisher->publish($this->post);
+
+    Http::assertNotSent(fn (Request $request): bool => data_get($request->data(), 'collaborators') !== null);
+});
+
+test('instagram publisher sends collaborators on a single image feed post', function () {
+    $this->post->update([
+        'meta' => ['collaborators' => ['@alice', 'bob']],
+        'media' => [[
+            'id' => 'test-media-image',
+            'path' => 'media/2026-01/test-image.jpg',
+            'url' => 'https://example.com/media/2026-01/test-image.jpg',
+            'mime_type' => 'image/jpeg',
+            'original_filename' => 'test.jpg',
+        ]],
+    ]);
+    fakeInstagramReelFlow();
+
+    $this->publisher->publish($this->post);
+
+    Http::assertSent(fn (Request $request): bool => str_ends_with($request->url(), '/ig_123456789/media')
+        && data_get($request->data(), 'image_url') === 'https://example.com/media/2026-01/test-image.jpg'
+        && data_get($request->data(), 'collaborators') === '["alice","bob"]');
+});
+
+test('a feed video on an account connected through Facebook sends no trial or music', function () {
+    $account = SocialAccount::factory()->create([
+        'workspace_id' => $this->workspace->id,
+        'platform' => Platform::InstagramFacebook,
+        'platform_user_id' => 'igf_1',
+        'token_expires_at' => now()->addDays(60),
+    ]);
+    $post = Post::factory()->forAccount($account, ContentType::InstagramFeed)->create([
+        'user_id' => $this->user->id,
+        'content' => 'Feed video',
+        'meta' => ['trial_graduation' => 'MANUAL', 'audio' => ['id' => '1234567890']],
+        'media' => instagramVideo(),
+    ]);
+    $post->setRelation('socialAccount', $account);
+    $graph = config('trypost.platforms.instagram-facebook.graph_api');
+
+    Http::fake([
+        "{$graph}/igf_1/media" => Http::response(['id' => 'container-9'], 200),
+        "{$graph}/container-9*" => Http::response(['status_code' => 'FINISHED'], 200),
+        "{$graph}/igf_1/media_publish" => Http::response(['id' => 'reel-9'], 200),
+        "{$graph}/reel-9*" => Http::response(['permalink' => 'https://www.instagram.com/reel/R9/'], 200),
+    ]);
+
+    $this->publisher->publish($post);
+
+    Http::assertSent(fn (Request $request): bool => str_ends_with($request->url(), '/igf_1/media')
+        && data_get($request->data(), 'media_type') === 'REELS'
+        && ! array_key_exists('trial_params', $request->data())
+        && ! array_key_exists('audio_configuration', $request->data()));
 });

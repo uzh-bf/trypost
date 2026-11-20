@@ -11,7 +11,6 @@ use App\Http\Resources\Api\ChannelPublicationPerformanceResource;
 use App\Mcp\Concerns\AuthorizesMcpTool;
 use App\Models\SocialAccount;
 use App\Models\Workspace;
-use App\Models\WorkspaceLabel;
 use App\Support\Analytics\ChannelMetrics;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Validation\Rule;
@@ -20,9 +19,13 @@ use Laravel\Mcp\Response;
 use Laravel\Mcp\ResponseFactory;
 use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Tool;
+use Laravel\Mcp\Server\Tools\Annotations\IsDestructive;
+use Laravel\Mcp\Server\Tools\Annotations\IsOpenWorld;
 use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 
-#[IsReadOnly]
+#[IsReadOnly(true)]
+#[IsDestructive(false)]
+#[IsOpenWorld(false)]
 #[Description('List the best posts of one channel in a date range, ranked by a metric (sort; defaults to the first metric the channel reports), for the current range or the previous range of the same length (period), optionally narrowed by labels, untagged posts and post types. Range preset 7d, 30d, mtd or custom with start and end; defaults to the last 30 days in your time zone. Same order as the channel Insights page; the ranking stops at the top 50 posts. Paginated: pass page to read the next page.')]
 class ListChannelPublicationsTool extends Tool
 {
@@ -57,9 +60,7 @@ class ListChannelPublicationsTool extends Tool
             'period' => ['sometimes', Rule::in(['current', 'previous'])],
             'sort' => ['sometimes', Rule::in(ChannelMetrics::sortable())],
             'labels' => ['sometimes', 'array'],
-            'labels.*' => ['bail', 'uuid', Rule::exists(WorkspaceLabel::class, 'id')
-                ->where('workspace_id', $workspace->id)
-                ->withoutTrashed()],
+            'labels.*' => ['uuid'],
             'untagged' => ['sometimes', 'boolean'],
             'types' => ['sometimes', 'array'],
             'types.*' => [Rule::in(PublicationFilter::typesFor($account->platform))],
@@ -90,7 +91,7 @@ class ListChannelPublicationsTool extends Tool
             'end' => $schema->string()->description('Optional end date in YYYY-MM-DD format.'),
             'period' => $schema->string()->enum(['current', 'previous'])->description('Optional: rank the posts of the current range (default) or of the previous range of the same length.'),
             'sort' => $schema->string()->enum(ChannelMetrics::sortable())->description('Optional metric to rank by; a metric the channel does not report falls back to the first one it does (see filters.sort).'),
-            'labels' => $schema->array()->items($schema->string())->description('Optional workspace label UUIDs; only posts with one of them count.'),
+            'labels' => $schema->array()->items($schema->string())->description('Optional workspace label UUIDs; only posts with one of them count. A deleted or unknown label matches nothing.'),
             'untagged' => $schema->boolean()->description('Optional: include posts without labels (and posts published outside TryPost).'),
             'types' => $schema->array()->items($schema->string())->description('Optional post types of this channel\'s platform (see list-content-types-tool); only those posts count.'),
             'page' => $schema->integer()->description('Page number.'),

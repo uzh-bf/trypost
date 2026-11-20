@@ -11,7 +11,6 @@ use App\Http\Resources\Api\ChannelInsightsResource;
 use App\Mcp\Concerns\AuthorizesMcpTool;
 use App\Models\SocialAccount;
 use App\Models\Workspace;
-use App\Models\WorkspaceLabel;
 use App\Support\Analytics\ChannelMetrics;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Validation\Rule;
@@ -20,9 +19,13 @@ use Laravel\Mcp\Response;
 use Laravel\Mcp\ResponseFactory;
 use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Tool;
+use Laravel\Mcp\Server\Tools\Annotations\IsDestructive;
+use Laravel\Mcp\Server\Tools\Annotations\IsOpenWorld;
 use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 
-#[IsReadOnly]
+#[IsReadOnly(true)]
+#[IsDestructive(false)]
+#[IsOpenWorld(false)]
 #[Description('Get the insights of one channel for a date range (range preset 7d, 30d, mtd or custom with start and end; defaults to the last 30 days in your time zone), optionally narrowed by labels, untagged posts and post types: the summary, the metrics the channel reports and the metric series for the range and the previous range of the same length. In the series, posts, reach, views, impressions and profile_visits are totals of the posts published each day (or week), not daily account totals; followers is the follower count at the end of each bucket, and net_followers is the followers gained since the start of the range, so it is cumulative. growth is the monthly follower growth rate for the last 12 months (null when the channel does not report followers); it ignores the range, labels, untagged and types filters. Use list-channel-publications-tool for the ranked posts.')]
 class GetChannelInsightsTool extends Tool
 {
@@ -57,9 +60,7 @@ class GetChannelInsightsTool extends Tool
             'period' => ['sometimes', Rule::in(['current', 'previous'])],
             'sort' => ['sometimes', Rule::in(ChannelMetrics::sortable())],
             'labels' => ['sometimes', 'array'],
-            'labels.*' => ['bail', 'uuid', Rule::exists(WorkspaceLabel::class, 'id')
-                ->where('workspace_id', $workspace->id)
-                ->withoutTrashed()],
+            'labels.*' => ['uuid'],
             'untagged' => ['sometimes', 'boolean'],
             'types' => ['sometimes', 'array'],
             'types.*' => [Rule::in(PublicationFilter::typesFor($account->platform))],
@@ -80,7 +81,7 @@ class GetChannelInsightsTool extends Tool
             'end' => $schema->string()->description('Optional end date in YYYY-MM-DD format.'),
             'period' => $schema->string()->enum(['current', 'previous'])->description('Optional publication period the ranking reads (current or previous range); echoed back in filters.period.'),
             'sort' => $schema->string()->enum(ChannelMetrics::sortable())->description('Optional metric the publication ranking sorts by; echoed back in filters.sort, falling back to the first metric the channel reports.'),
-            'labels' => $schema->array()->items($schema->string())->description('Optional workspace label UUIDs; only posts with one of them count.'),
+            'labels' => $schema->array()->items($schema->string())->description('Optional workspace label UUIDs; only posts with one of them count. A deleted or unknown label matches nothing.'),
             'untagged' => $schema->boolean()->description('Optional: include posts without labels (and posts published outside TryPost).'),
             'types' => $schema->array()->items($schema->string())->description('Optional post types of this channel\'s platform (see list-content-types-tool); only those posts count.'),
         ];

@@ -2,25 +2,12 @@
 
 declare(strict_types=1);
 
+use App\Models\Post;
 use App\Models\SocialAccount;
 use App\Models\User;
 use App\Models\Workspace;
 use Illuminate\Support\Facades\Http;
-
-function waitForComposerPreviewTestId(mixed $page, string $testId): void
-{
-    $page->script(<<<JS
-        (async () => {
-            for (let attempt = 0; attempt < 100; attempt++) {
-                const sheet = document.querySelector('[data-testid="post-composer-dialog"]');
-                if (sheet?.getAttribute('data-state') === 'open'
-                    && sheet.getAnimations().every((animation) => animation.playState !== 'running')
-                    && document.querySelector('[data-testid="{$testId}"]')?.getBoundingClientRect().height > 0) return;
-                await new Promise((resolve) => setTimeout(resolve, 50));
-            }
-        })();
-    JS);
-}
+use Illuminate\Support\Str;
 
 /**
  * @return array{0: User, 1: array<string, SocialAccount>}
@@ -54,12 +41,14 @@ test('the preview panel lists one labelled card per network and renders each net
     $this->actingAs($user);
 
     $page = visit(route('app.posts.create'));
-    waitForComposerPreviewTestId($page, 'composer-add-account');
+    waitForOpen($page, '@post-composer-dialog');
+    waitFor($page, '@composer-add-account');
 
     $page->click('@composer-add-account')
         ->click('@composer-select-all')
         ->fill('@composer-base-content', 'Testing the preview https://trypost.it #hashtags');
-    waitForComposerPreviewTestId($page, 'youtube-preview-subscribe');
+    waitForOpen($page, '@post-composer-dialog');
+    waitFor($page, '@youtube-preview-subscribe');
 
     $page->assertSeeIn('@composer-preview-title', 'Post previews')
         ->assertPresent('@composer-preview-info');
@@ -93,7 +82,8 @@ test('the preview panel lists one labelled card per network and renders each net
     expect($page->script('document.querySelectorAll("[data-testid=youtube-preview] [data-testid=preview-rail-action]").length'))->toBe(4);
 
     $page->click('@composer-next');
-    waitForComposerPreviewTestId($page, 'composer-customization');
+    waitForOpen($page, '@post-composer-dialog');
+    waitFor($page, '@composer-customization');
 
     expect($page->script('document.querySelector("[data-testid=composer-preview-title]").textContent.trim()'))
         ->toMatch('/^(X|TikTok|Instagram|YouTube) preview$/')
@@ -102,3 +92,79 @@ test('the preview panel lists one labelled card per network and renders each net
 
     $page->assertNoJavaScriptErrors();
 });
+
+test('a pdf preview crops the browser viewer frame around the page', function () {
+    Http::fake();
+    [$user] = composerPreviewWorkspace();
+    $linkedin = SocialAccount::factory()->linkedin()->create(['workspace_id' => $user->current_workspace_id]);
+    $post = Post::factory()->forAccount($linkedin)->create([
+        'user_id' => $user->id,
+        'content' => 'A deck',
+        'media' => [['id' => (string) Str::uuid(), 'type' => 'document', 'path' => 'medias/deck.pdf', 'url' => 'https://example.com/deck.pdf', 'mime_type' => 'application/pdf', 'original_filename' => 'deck.pdf']],
+    ]);
+    $this->actingAs($user);
+
+    $page = visit(route('app.posts.edit', $post))->resize(1440, 900);
+    waitForOpen($page, '@post-composer-dialog');
+    waitFor($page, '@linkedin-preview');
+
+    $crop = $page->script(<<<'JS'
+        (() => {
+            const frame = document.querySelector('[data-testid="linkedin-preview"] [data-testid="preview-media"] > div');
+            const viewer = frame.querySelector('iframe');
+            const outer = frame.getBoundingClientRect();
+            const inner = viewer.getBoundingClientRect();
+
+            return {
+                clipped: getComputedStyle(frame).overflow === 'hidden',
+                left: Math.round(outer.left - inner.left),
+                top: Math.round(outer.top - inner.top),
+                right: Math.round(inner.right - outer.right),
+                bottom: Math.round(inner.bottom - outer.bottom),
+            };
+        })()
+    JS);
+
+    expect($crop)->toBe(['clipped' => true, 'left' => 8, 'top' => 8, 'right' => 8, 'bottom' => 8]);
+    $page->assertNoJavaScriptErrors();
+});
+
+test('the x preview lays two images side by side and three as one tall image beside two', function (int $count) {
+    Http::fake();
+    [$user, $accounts] = composerPreviewWorkspace();
+    $media = collect(range(1, $count))->map(fn (int $index): array => [
+        'id' => (string) Str::uuid(),
+        'type' => 'image',
+        'path' => "medias/photo-{$index}.png",
+        'url' => 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+        'mime_type' => 'image/png',
+        'original_filename' => "photo-{$index}.png",
+        'meta' => ['width' => 1200, 'height' => 800],
+    ])->all();
+    $post = Post::factory()->forAccount($accounts['x'])->create(['user_id' => $user->id, 'content' => 'Photos', 'media' => $media]);
+    $this->actingAs($user);
+
+    $page = visit(route('app.posts.edit', $post))->resize(1440, 900);
+    waitForOpen($page, '@post-composer-dialog');
+    waitFor($page, '@x-preview');
+
+    $tiles = $page->script(<<<'JS'
+        [...document.querySelectorAll('[data-testid="x-preview"] [data-testid="preview-media"] img')].map((image) => {
+            const box = image.getBoundingClientRect();
+            return [Math.round(box.left), Math.round(box.top), Math.round(box.height)];
+        })
+    JS);
+
+    expect($page->script('document.querySelector(\'[data-testid="x-preview"] [data-testid="preview-media"]\').dataset.layout'))->toBe('grid')
+        ->and($tiles)->toHaveCount($count)
+        ->and($tiles[1][0])->toBeGreaterThan($tiles[0][0])
+        ->and($tiles[1][1])->toBe($tiles[0][1]);
+
+    if ($count === 3) {
+        expect($tiles[2][0])->toBe($tiles[1][0])
+            ->and($tiles[2][1])->toBeGreaterThan($tiles[1][1])
+            ->and($tiles[0][2])->toBeGreaterThan($tiles[1][2]);
+    }
+
+    $page->assertNoJavaScriptErrors();
+})->with([2, 3]);

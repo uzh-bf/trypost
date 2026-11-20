@@ -14,9 +14,12 @@ use App\Exceptions\SocialAccount\ConnectFlowException;
 use App\Exceptions\SocialAccount\NetworkAlreadyConnectedException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\FinishSocialConnectionRequest;
+use App\Jobs\PostHog\TrackSocialAccountConnected;
+use App\Jobs\PostHog\TrackSocialAccountRemoved;
 use App\Models\Repurpose;
 use App\Models\SocialAccount;
 use App\Models\Workspace;
+use App\Services\PostHogService;
 use App\Support\Social\PendingConnection;
 use Exception;
 use Illuminate\Http\RedirectResponse;
@@ -71,6 +74,16 @@ class SocialController extends Controller
         } catch (QueueBusyException $exception) {
             return back()->with('flash.error', $exception->getMessage());
         }
+
+        rescue(function () use ($request, $account): void {
+            TrackSocialAccountRemoved::dispatchIf(
+                PostHogService::isEnabled(),
+                (string) $request->user()->id,
+                (string) $account->id,
+                (string) $account->workspace_id,
+                $account->platform,
+            );
+        });
 
         $this->flashAccountChange($before);
 
@@ -136,6 +149,17 @@ class SocialController extends Controller
             ]);
 
             return $this->failConnection('error_connecting');
+        }
+
+        foreach ($accounts as $account) {
+            rescue(function () use ($account, $reconnect, $request, $pending): void {
+                TrackSocialAccountConnected::dispatchIf(
+                    PostHogService::isEnabled() && blank($reconnect) && $account->wasRecentlyCreated,
+                    (string) $account->id,
+                    (string) $request->user()->id,
+                    $pending->returnRouteName(),
+                );
+            });
         }
 
         PendingConnection::forget();
@@ -306,21 +330,35 @@ class SocialController extends Controller
         if ($reconnect !== null) {
             return array_values(array_filter(
                 $identities,
-                fn (array $identity): bool => data_get($identity, 'platform_user_id') === (string) $reconnect->platform_user_id,
+                fn (array $identity): bool => self::isIdentityOf($reconnect, $identity),
             ));
         }
 
         $seated = $workspace->socialAccounts()
             ->whereIn('platform', $this->platform->networkPlatformValues())
-            ->get(['platform', 'platform_user_id']);
+            ->get(['platform', 'platform_user_id', 'meta']);
 
         return array_values(array_filter(
             $identities,
             fn (array $identity): bool => ! $seated->contains(
-                fn (SocialAccount $account): bool => (string) $account->platform_user_id === data_get($identity, 'platform_user_id')
-                    && $account->platform->value !== data_get($identity, 'platform'),
+                fn (SocialAccount $account): bool => $account->platform->value !== data_get($identity, 'platform')
+                    && self::isIdentityOf($account, $identity),
             ),
         ));
+    }
+
+    /**
+     * Whether an offered identity is this account (see SocialAccount::isIdentity()).
+     *
+     * @param  array<string, mixed>  $identity
+     */
+    private static function isIdentityOf(SocialAccount $account, array $identity): bool
+    {
+        return $account->isIdentity(
+            SocialPlatform::from((string) data_get($identity, 'platform')),
+            (string) data_get($identity, 'platform_user_id'),
+            data_get($identity, 'attributes.meta.ig_user_id'),
+        );
     }
 
     /**

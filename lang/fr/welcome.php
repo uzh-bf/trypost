@@ -15,6 +15,7 @@ return [
     'steps' => [
         'persona' => 'À propos de vous',
         'goals' => 'Vos objectifs',
+        'software' => 'Outil actuel',
         'plan' => 'Forfait',
     ],
     'personas' => [
@@ -39,6 +40,14 @@ return [
         'manage_clients' => 'Gérer marques ou clients',
         'other' => 'Autre chose',
     ],
-    'plan_title' => 'Choisissez votre forfait',
-    'plan_description' => 'Les deux formules ont les mêmes fonctionnalités. Seul le nombre de workspaces change, et vous pouvez changer de formule quand vous voulez.',
+    'software_title' => 'Quel outil utilisez-vous aujourd\'hui ?',
+    'software' => [
+        'none' => 'Je n\'en utilise pas encore',
+        'other' => 'Autre',
+    ],
+    'plan_title' => 'Activez votre compte',
+    'plan_description' => 'Connectez vos réseaux et programmez votre premier post dès aujourd’hui.',
+    'plan_terms' => 'Puis :price/mois. Annulez à tout moment',
+    'plan_checkout_button' => 'Activer mon compte',
+    'plan_cancel_anytime' => 'Annulez à tout moment',
 ];

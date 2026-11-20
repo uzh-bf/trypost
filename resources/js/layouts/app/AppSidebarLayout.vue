@@ -9,11 +9,14 @@ import { ref, watch } from 'vue';
 import AppHeader from '@/components/AppHeader.vue';
 import AppLogo from '@/components/AppLogo.vue';
 import AppSidebar from '@/components/AppSidebar.vue';
+import ChangelogDialog from '@/components/changelog/ChangelogDialog.vue';
 import ConnectChannelDialog from '@/components/channels/ConnectChannelDialog.vue';
 import CommandPalette from '@/components/command-palette/CommandPalette.vue';
 import GlobalPostComposer from '@/components/posts/composer/GlobalPostComposer.vue';
 import ReferralSourceSurvey from '@/components/ReferralSourceSurvey.vue';
 import Toast from '@/components/Toast.vue';
+import McpPromptTour from '@/components/tours/McpPromptTour.vue';
+import TourOverlay from '@/components/tours/TourOverlay.vue';
 import {
     SidebarInset,
     SidebarProvider,
@@ -118,7 +121,10 @@ watch(isCompactViewport, (isCompact) => {
     </SidebarProvider>
     <GlobalPostComposer />
     <ConnectChannelDialog />
+    <ChangelogDialog />
     <CommandPalette />
     <ReferralSourceSurvey />
+    <McpPromptTour />
+    <TourOverlay />
     <Toast />
 </template>

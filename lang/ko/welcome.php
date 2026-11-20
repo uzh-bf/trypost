@@ -15,6 +15,7 @@ return [
     'steps' => [
         'persona' => '나에 대해',
         'goals' => '목표',
+        'software' => '현재 도구',
         'plan' => '요금제',
     ],
     'personas' => [
@@ -39,6 +40,14 @@ return [
         'manage_clients' => '브랜드나 고객 관리',
         'other' => '다른 것',
     ],
-    'plan_title' => '요금제 선택',
-    'plan_description' => '두 플랜의 기능은 같습니다. 차이는 워크스페이스 수이고, 플랜은 언제든 바꿀 수 있습니다.',
+    'software_title' => '지금 어떤 도구를 사용하고 있나요?',
+    'software' => [
+        'none' => '아직 사용하지 않아요',
+        'other' => '기타',
+    ],
+    'plan_title' => '계정을 활성화하세요',
+    'plan_description' => '채널을 연결하고 오늘 첫 게시물을 예약하세요.',
+    'plan_terms' => '이후 :price/월. 언제든지 해지 가능',
+    'plan_checkout_button' => '내 계정 활성화',
+    'plan_cancel_anytime' => '언제든지 해지 가능',
 ];

@@ -15,6 +15,7 @@ return [
     'steps' => [
         'persona' => 'Over jou',
         'goals' => 'Je doelen',
+        'software' => 'Huidige tool',
         'plan' => 'Abonnement',
     ],
     'personas' => [
@@ -39,6 +40,14 @@ return [
         'manage_clients' => 'Merken of klanten beheren',
         'other' => 'Iets anders',
     ],
-    'plan_title' => 'Kies je abonnement',
-    'plan_description' => 'Beide plannen hebben dezelfde functies. Het verschil is het aantal workspaces, en je kunt wisselen wanneer je wilt.',
+    'software_title' => 'Welke tool gebruik je nu?',
+    'software' => [
+        'none' => 'Ik gebruik er nog geen',
+        'other' => 'Andere',
+    ],
+    'plan_title' => 'Activeer je account',
+    'plan_description' => 'Koppel je kanalen en plan vandaag je eerste post.',
+    'plan_terms' => 'Daarna :price/maand. Altijd opzegbaar',
+    'plan_checkout_button' => 'Mijn account activeren',
+    'plan_cancel_anytime' => 'Altijd opzegbaar',
 ];

@@ -1,0 +1,13 @@
+# Maintaining the downstream release
+
+The integration source is upstream tag v2.1.0 (b569076f). The previous downstream release is v2.0.0-uzh.11 (d1f55077); those lines diverged at 7b9eeec9. Use the upstream tag as the second merge parent. Compare the resulting tree with that tag to see the maintained patches.
+
+| Behavior | Where it differs from upstream | Retire when |
+| --- | --- | --- |
+| Release CI and portable WebSocket endpoint | The release branch runs lint and tests. The Docker workflow publishes the exact fork tag. The Dockerfile and Echo client derive the default socket endpoint from the page. Originated in #32. | The upstream workflow supports fork tags and the same image works behind multiple TLS hosts. |
+| Model and writing-style selection | AI catalogs, request validation, generation agents, prompt views and editor selectors pass a model and style through generation, rewriting, and length fitting. Model-specific capabilities also govern alt text. New upstream content-type limits and success tracking apply. See #35, #36 and #38. | Upstream can select configured routes and styles per request, restrict image inputs and preserve the chosen style when shortening text. |
+| Idea handoff | The preview records the style used for generation, and an editor can use selected idea text in a post. Includes localization and browser coverage. See #39, #41 and #42. | Upstream preserves source credit, successful preview identity, and selected text in an unscheduled draft. |
+| Private Blob media | Storage registration, the flat key adapter, delegated signing, projected credentials, upload and media access helpers keep stored references stable and grant temporary reads to the intended consumer. Social publishers, previews, mail, webhooks and API resources share those helpers. The current upstream image-processing trait hosts derived files for stories and covers. See #37 and #40. | Upstream supports flat private Blob objects with workload identity rotation, authorized browser access and fresh provider URLs, including derived images. |
+| Selected-channel publication discovery | Configuration, dispatcher and queued bootstrap/backfill/discovery jobs honor a single opted-in account when global discovery is off. The external calendar import limit is independent. See #34 and #43. | The upstream scheduler and queued jobs enforce this same account selection, including when configuration changes after dispatch. |
+
+The existing project plans and recipes document earlier iterations. Do not replay them as separate implementations. The legacy timezone-package installation was retired with v2.1.0's canonical alias handling. The old image fitting trait was removed upstream; apply signed reads in its replacement, HostsProcessedImages.

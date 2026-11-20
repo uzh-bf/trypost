@@ -7,6 +7,7 @@ return [
     'select_workspace' => 'Выберите рабочее пространство',
     'create_workspace' => 'Новое пространство',
     'new' => 'Создать',
+    'unfinished_post' => 'У вас есть незавершённый пост',
     'create' => 'Создание',
     'new_menu' => [
         'post' => 'Пост',
@@ -48,6 +49,7 @@ return [
         'github' => 'GitHub',
         'status' => 'Статус приложения',
         'chat' => 'Поддержка в чате',
+        'changelog' => 'Что нового',
         'referral' => 'Зарабатывайте 30% по реферальной программе',
         'discord' => 'Сообщество Discord',
         'community' => 'Сообщество',

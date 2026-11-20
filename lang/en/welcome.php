@@ -15,6 +15,7 @@ return [
     'steps' => [
         'persona' => 'About you',
         'goals' => 'Your goals',
+        'software' => 'Current tool',
         'plan' => 'Plan',
     ],
     'personas' => [
@@ -39,6 +40,14 @@ return [
         'manage_clients' => 'Manage brands or clients',
         'other' => 'Something else',
     ],
-    'plan_title' => 'Choose your plan',
-    'plan_description' => 'Both plans have the same features. The difference is how many workspaces you get, and you can switch plans whenever you like.',
+    'software_title' => 'Which tool do you use today?',
+    'software' => [
+        'none' => 'I don\'t use one yet',
+        'other' => 'Other',
+    ],
+    'plan_title' => 'Activate your account',
+    'plan_description' => 'Connect your channels and schedule your first post today.',
+    'plan_terms' => 'Then :price/month. Cancel anytime',
+    'plan_checkout_button' => 'Activate my account',
+    'plan_cancel_anytime' => 'Cancel anytime',
 ];
