@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 return [
     'title' => '设置',
     'description' => '管理你的个人资料和账户设置',
@@ -9,13 +11,11 @@ return [
         'groups' => [
             'personal' => '个人',
             'workspace' => '工作区',
-            'features' => '功能',
-            'developers' => '开发者',
-            'account' => '账户',
+            'content' => '内容',
+            'integrations' => '集成',
         ],
         'items' => [
             'profile' => '个人资料',
-            'authentication' => '身份验证',
             'notifications' => '通知',
             'preferences' => '偏好设置',
             'general' => '常规',
@@ -24,7 +24,7 @@ return [
             'signatures' => '签名',
             'labels' => '标签',
             'webhooks' => 'Webhooks',
-            'api_keys' => 'API 密钥',
+            'api_keys' => 'API',
             'mcp' => 'MCP',
             'billing' => '账单',
         ],
@@ -41,7 +41,7 @@ return [
         'account_disconnected' => '账号已断开连接',
         'account_disconnected_description' => '当某个社交账号断开连接时收到邮件',
         'post_note_added' => '帖子有新备注',
-        'post_note_added_description' => '当团队成员为帖子添加备注时接收邮件',
+        'post_note_added_description' => '当团队成员在备注中提到你，或为你创建或备注过的帖子添加备注时接收邮件',
         'collaboration' => '协作',
         'collaboration_description' => '接收关于审批请求以及已批准或已拒绝帖子的邮件',
         'save_failed' => '无法保存通知偏好，请重试。',
@@ -100,27 +100,23 @@ return [
         'resend_verification' => '点击此处重新发送验证邮件。',
         'verification_sent' => '新的验证链接已发送至你的邮箱地址。',
         'save' => '保存',
-    ],
-
-    'authentication' => [
-        'title' => '身份验证',
-        'page_title' => '身份验证设置',
+        'tabs' => [
+            'profile' => '个人资料',
+            'login' => '密码与登录',
+            'sessions' => '会话',
+        ],
         'sessions' => [
             'title' => '活动会话',
             'description' => '如果你发现任何可疑情况，请退出其他设备的登录。',
             'unknown_browser' => '未知浏览器',
-            'unknown_ip' => '未知 IP',
             'on' => '于',
             'active_now' => '当前活动',
+            'last_activity' => '最后活动：:time',
             'log_out_others' => '退出其他设备',
             'modal_title' => '退出其他设备',
-            'modal_description_password' => '输入你当前的密码，以确认你要退出其他浏览器会话。',
-            'modal_description_email' => '输入你的邮箱地址，以确认你要退出其他浏览器会话。',
-            'password_placeholder' => '当前密码',
-            'email_placeholder' => '你的账户邮箱',
+            'modal_description' => '登录你账户的所有其他设备都将退出登录。当前会话保持登录。',
             'cancel' => '取消',
             'submit' => '退出其他设备',
-            'email_mismatch' => '该邮箱地址与你的账户不匹配。',
             'flash_logged_out' => '你已从其他设备退出登录。',
         ],
         'password' => [

@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Dto\MediaItem;
+use App\Enums\PostPlatform\ContentType;
 use App\Http\Resources\Api\PostResource;
 use App\Jobs\DispatchWebhook;
 use App\Mcp\Servers\TryPostServer;
@@ -17,9 +18,12 @@ use App\Models\Webhook;
 use App\Models\WebhookLog;
 use App\Models\Workspace;
 use App\Services\Http\SafeHttpFetcher;
+use App\Services\Media\MediaOptimizer;
+use App\Services\Social\InstagramPublisher;
 use App\Services\WebhookService;
 use App\Support\Media\MediaUrl;
 use App\Support\Media\RedactStorageCredentials;
+use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Testing\Fluent\AssertableJson;
@@ -179,6 +183,54 @@ test('the publishing consumer resolves media access when it executes', function 
     expect($item->publishUrl())->toContain('sig=synthetic');
     expect($this->signing->requests)->toHaveCount(1)
         ->and($this->signing->requests[0][1]->getTimestamp())->toBe(now()->addHours(26)->getTimestamp());
+});
+
+test('processed Instagram story media uses a private Azure publishing link', function () {
+    $account = SocialAccount::factory()->instagram()->create([
+        'workspace_id' => $this->workspace->id,
+        'platform_user_id' => 'ig_123456789',
+    ]);
+    $post = Post::factory()->forAccount($account, ContentType::InstagramStory)->create([
+        'user_id' => $this->user->id,
+        'media' => [MediaItem::fromMedia($this->media)->toArray()],
+    ]);
+
+    $optimizer = Mockery::mock(MediaOptimizer::class);
+    $optimizer->shouldReceive('fitToCanvas')->once()->with(Mockery::type('string'), 1080, 1920)
+        ->andReturnUsing(function (string $source): string {
+            $processed = tempnam(sys_get_temp_dir(), 'azure_story_');
+            copy($source, $processed);
+
+            return $processed;
+        });
+    app()->instance(MediaOptimizer::class, $optimizer);
+
+    Http::fake([
+        'https://graph.instagram.com/v25.0/ig_123456789/media' => Http::response(['id' => 'story-container-123']),
+        'https://graph.instagram.com/v25.0/story-container-123*' => Http::response(['status_code' => 'FINISHED']),
+        'https://graph.instagram.com/v25.0/ig_123456789/media_publish' => Http::response(['id' => 'story-123456789']),
+        'https://graph.instagram.com/v25.0/story-123456789*' => Http::response([
+            'permalink' => 'https://www.instagram.com/stories/test/123/',
+        ]),
+        'https://example.blob.core.windows.net/media/*' => Http::response(
+            file_get_contents(base_path('tests/fixtures/1x1.png')),
+            200,
+            ['Content-Type' => 'image/png'],
+        ),
+    ]);
+
+    expect((new InstagramPublisher)->publish($post)['id'])->toBe('story-123456789');
+    expect($this->signing->requests)->toHaveCount(2)
+        ->and(collect($this->signing->requests)->pluck(0)->filter(
+            fn (string $path): bool => str_starts_with($path, 'social-crops/'),
+        ))->toHaveCount(1);
+    Http::assertSent(function (Request $request): bool {
+        $imageUrl = (string) data_get($request->data(), 'image_url');
+
+        return $request->url() === 'https://graph.instagram.com/v25.0/ig_123456789/media'
+            && str_contains(rawurldecode($imageUrl), 'social-crops/')
+            && str_contains($imageUrl, 'sig=synthetic');
+    });
 });
 
 test('webhook retries renew file links and sign the wire body while logs keep canonical references', function () {

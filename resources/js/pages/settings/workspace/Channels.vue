@@ -1,42 +1,116 @@
 <script setup lang="ts">
-import { Head, usePage } from '@inertiajs/vue3';
-import { IconGripVertical, IconPlus } from '@tabler/icons-vue';
-import { computed, ref } from 'vue';
+import { Head, InfiniteScroll, router, usePage } from '@inertiajs/vue3';
+import { IconPlus } from '@tabler/icons-vue';
+import { computed, ref, watch } from 'vue';
 
 import ChannelListItem from '@/components/channels/ChannelListItem.vue';
 import ChannelsEmptyIllustration from '@/components/channels/ChannelsEmptyIllustration.vue';
 import DisconnectChannelDialog from '@/components/channels/DisconnectChannelDialog.vue';
 import EmptyState from '@/components/EmptyState.vue';
+import NetworkFilter from '@/components/NetworkFilter.vue';
+import SettingsSearch from '@/components/settings/SettingsSearch.vue';
 import { Button } from '@/components/ui/button';
-import { orderChannels, useChannelOrder } from '@/composables/useChannelOrder';
+import { TableLoadMore } from '@/components/ui/table';
+import { orderChannels } from '@/composables/useChannelOrder';
 import { useConnectChannelDialog } from '@/composables/useConnectChannelDialog';
 import { useNetworkConnect } from '@/composables/useNetworkConnect';
+import debounce from '@/debounce';
 import SettingsLayout from '@/layouts/SettingsLayout.vue';
+import { blank } from '@/lib/helpers';
+import { channels as channelsSettings } from '@/routes/app/workspace';
+import { Platform } from '@/types/platform';
 import type {
     AvailablePlatform,
+    ChannelListRow,
     ConnectedAccount,
 } from '@/types/social-account';
 
+interface ScrollChannelRows {
+    data: ChannelListRow[];
+}
+
 const props = defineProps<{
-    connectedChannels: ConnectedAccount[];
+    connectedChannels: ScrollChannelRows;
+    /** Every channel of the workspace, whatever the search and filter. */
+    total: number;
+    /** Every network the workspace has a channel on, in channel order. */
+    networks: string[];
+    filters: { search: string; networks: string[] };
 }>();
 
-const channels = computed<ConnectedAccount[]>(() =>
-    orderChannels(props.connectedChannels),
+const channels = computed<ChannelListRow[]>(() =>
+    orderChannels(props.connectedChannels.data),
 );
-const reorderable = computed(() => channels.value.length > 1);
-const { vSortableChannel, move, onHandleKeydown, dropIndicator } =
-    useChannelOrder({
-        list: 'settings',
-        order: () => channels.value.map((channel) => channel.id),
-    });
+
+const search = ref(props.filters.search);
+const selectedNetworks = ref<string[]>(props.filters.networks);
+
+/** Whether the workspace has any channel, whatever the search and filter. */
+const hasChannels = computed((): boolean => {
+    if (props.total > 0) {
+        return true;
+    }
+
+    return false;
+});
+
+/** The network filter shows once there is more than one network to pick from. */
+const showsNetworkFilter = computed((): boolean => {
+    if (props.networks.length > 1) {
+        return true;
+    }
+
+    return false;
+});
+
+const searchQuery = (): string | undefined => {
+    if (blank(search.value)) {
+        return undefined;
+    }
+
+    return search.value;
+};
+
+const networksQuery = (): string[] | undefined => {
+    if (blank(selectedNetworks.value)) {
+        return undefined;
+    }
+
+    return selectedNetworks.value;
+};
+
+/** A new search or filter reloads the list from its first page. */
+const applyFilters = debounce((): void => {
+    router.get(
+        channelsSettings.url(),
+        {
+            search: searchQuery(),
+            networks: networksQuery(),
+        },
+        {
+            preserveState: true,
+            preserveScroll: true,
+            replace: true,
+            reset: ['connectedChannels'],
+        },
+    );
+}, 300);
+
+watch([search, selectedNetworks], applyFilters);
 
 const page = usePage();
 const platforms = computed<AvailablePlatform[]>(
     () => (page.props.connectablePlatforms as AvailablePlatform[]) ?? [],
 );
-const { open: openConnectDialog } = useConnectChannelDialog();
-const { startConnect } = useNetworkConnect(platforms);
+const { open: openConnectDialog, openAt } = useConnectChannelDialog();
+const { startConnect, instagramMethods } = useNetworkConnect(platforms);
+
+const canLinkFacebook = (channel: ConnectedAccount): boolean =>
+    channel.platform === Platform.Instagram &&
+    instagramMethods.value.includes(Platform.InstagramFacebook);
+
+const linkFacebook = (channel: ConnectedAccount): void =>
+    openAt(Platform.InstagramFacebook, channel.id);
 
 const disconnectDialog = ref<InstanceType<
     typeof DisconnectChannelDialog
@@ -55,7 +129,9 @@ const disconnectChannel = (channel: ConnectedAccount): void =>
     <SettingsLayout
         :title="$t('channels.title')"
         :description="$t('channels.description')"
-        :centered="channels.length === 0"
+        :centered="!hasChannels"
+        :total="total"
+        wide
     >
         <template #actions>
             <Button data-testid="channels-connect" @click="openConnectDialog()">
@@ -64,44 +140,74 @@ const disconnectChannel = (channel: ConnectedAccount): void =>
             </Button>
         </template>
 
-            <ul v-if="channels.length > 0" class="flex flex-col gap-3">
-                <li
-                    v-for="(channel, index) in channels"
-                    :key="channel.id"
-                    v-sortable-channel="reorderable ? channel.id : null"
-                    class="relative transition-opacity duration-150 data-dragging:opacity-40"
-                    :data-testid="`channel-list-row-${channel.id}`"
+            <div v-if="hasChannels" class="flex flex-col gap-3">
+                <div class="flex items-center gap-2" data-testid="channels-toolbar">
+                    <SettingsSearch
+                        v-model="search"
+                        class="min-w-0 flex-1"
+                        :placeholder="$t('channels.list.search')"
+                    />
+                    <NetworkFilter
+                        v-if="showsNetworkFilter"
+                        v-model="selectedNetworks"
+                        :networks="networks"
+                        test-id="channels-network"
+                        sheet-below-sm
+                    />
+                </div>
+
+                <EmptyState
+                    v-if="blank(channels)"
+                    :title="$t('channels.list.no_results')"
+                    data-testid="channels-no-results"
+                >
+                    <template #illustration>
+                        <ChannelsEmptyIllustration />
+                    </template>
+                </EmptyState>
+
+                <div
+                    v-else
+                    class="overflow-hidden rounded-xl border border-border bg-card"
+                    data-testid="channels-list"
                 >
                     <div
-                        v-if="dropIndicator?.channelId === channel.id"
-                        class="pointer-events-none absolute inset-x-0 h-0.5 rounded-full bg-primary-strong"
-                        :class="dropIndicator.edge === 'top' ? '-top-[7px]' : '-bottom-[7px]'"
-                        :data-testid="`channel-drop-indicator-${channel.id}`"
-                    />
-                    <ChannelListItem
-                        :channel="channel"
-                        :can-move-up="reorderable && index > 0"
-                        :can-move-down="reorderable && index < channels.length - 1"
-                        @reconnect="reconnectChannel"
-                        @disconnect="disconnectChannel"
-                        @move="(moved, offset) => move(moved.id, offset)"
+                        class="hidden gap-x-3 border-b border-border bg-secondary/50 px-4 py-2 text-xs font-medium text-muted-foreground md:grid md:channel-list-columns"
+                        aria-hidden="true"
                     >
-                        <template v-if="reorderable" #handle>
-                            <button
-                                type="button"
-                                class="-ms-2 flex h-8 w-5 shrink-0 cursor-grab items-center justify-center rounded-md text-muted-foreground outline-hidden hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing"
-                                :aria-label="$t('channels.reorder.handle', { name: channel.display_name || channel.username })"
-                                :title="$t('channels.reorder.handle', { name: channel.display_name || channel.username })"
-                                :data-channel-handle="`settings:${channel.id}`"
-                                :data-testid="`channel-handle-${channel.id}`"
-                                @keydown="onHandleKeydown($event, channel.id)"
-                            >
-                                <IconGripVertical class="size-4" />
-                            </button>
+                        <span>{{ $t('channels.list.columns.channel') }}</span>
+                        <span>{{ $t('channels.list.columns.timezone') }}</span>
+                        <span>{{ $t('channels.list.columns.posting_times') }}</span>
+                        <span>{{ $t('channels.list.columns.this_week') }}</span>
+                        <span />
+                    </div>
+                    <InfiniteScroll
+                        data="connectedChannels"
+                        items-element="#channels-body"
+                        preserve-url
+                    >
+                    <ul id="channels-body" class="divide-y divide-border">
+                        <li
+                            v-for="channel in channels"
+                            :key="channel.id"
+                            :data-testid="`channel-list-row-${channel.id}`"
+                        >
+                            <ChannelListItem
+                                :channel="channel"
+                                :can-link-facebook="canLinkFacebook(channel)"
+                                @reconnect="reconnectChannel"
+                                @link-facebook="linkFacebook"
+                                @disconnect="disconnectChannel"
+                            />
+                        </li>
+                    </ul>
+
+                        <template #next="{ loading }">
+                            <TableLoadMore v-if="loading" />
                         </template>
-                    </ChannelListItem>
-                </li>
-            </ul>
+                    </InfiniteScroll>
+                </div>
+            </div>
 
             <EmptyState
                 v-else

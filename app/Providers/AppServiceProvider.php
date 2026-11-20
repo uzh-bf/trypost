@@ -4,22 +4,26 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
-use App\Listeners\StripeEventListener;
+use App\Actions\Mcp\ListChatGptEgressRanges;
 use App\Models\AccessToken;
 use App\Models\Account;
 use App\Models\AnalyticsAccountDailySnapshot;
 use App\Models\AnalyticsPublication;
 use App\Models\AnalyticsPublicationDailySnapshot;
 use App\Models\AnalyticsSyncState;
+use App\Models\ChangelogEntry;
+use App\Models\ChangelogEntryView;
 use App\Models\Idea;
 use App\Models\IdeaStage;
 use App\Models\Invite;
 use App\Models\Media;
 use App\Models\MediaSourceConnection;
 use App\Models\NotificationPreference;
+use App\Models\Offer;
 use App\Models\Plan;
 use App\Models\Post;
 use App\Models\PostNote;
+use App\Models\PostNoteReaction;
 use App\Models\PostTemplate;
 use App\Models\Repurpose;
 use App\Models\RepurposeItem;
@@ -69,9 +73,8 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
 use Laravel\Cashier\Cashier;
-use Laravel\Cashier\Events\WebhookHandled;
 use Laravel\Nightwatch\Facades\Nightwatch;
-use Laravel\Nightwatch\Records\CacheEvent;
+use Laravel\Nightwatch\Records\Query;
 use Laravel\Socialite\Facades\Socialite;
 use Laravel\Socialite\Two\GoogleProvider;
 use League\Flysystem\Filesystem;
@@ -81,6 +84,7 @@ use SocialiteProviders\LinkedIn\LinkedInExtendSocialite;
 use SocialiteProviders\Manager\SocialiteWasCalled;
 use SocialiteProviders\Pinterest\PinterestExtendSocialite;
 use SocialiteProviders\TikTok\TikTokExtendSocialite;
+use Symfony\Component\HttpFoundation\IpUtils;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -125,10 +129,10 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->configureDefaults();
         $this->configureMorphMap();
+        $this->configureNightwatch();
         $this->configurePostHog();
         $this->configureRateLimiting();
         $this->configureSocialite();
-        $this->configureStripeWebhooks();
         $this->configureAzureStorage();
 
         Cashier::useCustomerModel(Account::class);
@@ -159,6 +163,23 @@ class AppServiceProvider extends ServiceProvider
         });
     }
 
+    /**
+     * Jobs, commands and scheduled tasks send only their slow queries: the queue
+     * runs millions of fast ones a month, and each would count as an event. Web
+     * requests keep every query, since they are already sampled.
+     */
+    protected function configureNightwatch(): void
+    {
+        if (! config('nightwatch.enabled')) {
+            return;
+        }
+
+        $slowQueryMicroseconds = config('nightwatch.filtering.slow_query_ms') * 1000;
+
+        Nightwatch::rejectQueries(fn (Query $query): bool => $this->app->runningInConsole()
+            && $query->duration < $slowQueryMicroseconds);
+    }
+
     protected function configureMorphMap(): void
     {
         Relation::enforceMorphMap([
@@ -168,12 +189,15 @@ class AppServiceProvider extends ServiceProvider
             'analyticsPublication' => AnalyticsPublication::class,
             'analyticsPublicationDailySnapshot' => AnalyticsPublicationDailySnapshot::class,
             'analyticsSyncState' => AnalyticsSyncState::class,
+            'changelogEntry' => ChangelogEntry::class,
+            'changelogEntryView' => ChangelogEntryView::class,
             'idea' => Idea::class,
             'ideaStage' => IdeaStage::class,
             'invite' => Invite::class,
             'media' => Media::class,
             'mediaSourceConnection' => MediaSourceConnection::class,
             'notificationPreference' => NotificationPreference::class,
+            'offer' => Offer::class,
             'plan' => Plan::class,
             'post' => Post::class,
             'repurpose' => Repurpose::class,
@@ -182,6 +206,7 @@ class AppServiceProvider extends ServiceProvider
             'rssFeedCollection' => RssFeedCollection::class,
             'rssFeedItem' => RssFeedItem::class,
             'postComment' => PostNote::class,
+            'postNoteReaction' => PostNoteReaction::class,
             'postTemplate' => PostTemplate::class,
             'socialAccount' => SocialAccount::class,
             'subscription' => Subscription::class,
@@ -223,9 +248,14 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(60)->by($key);
         });
 
+        RateLimiter::for('mcp', fn (Request $request): array => $this->mcpLimits($request));
+
         RateLimiter::for(
-            'mcp-oauth-registration',
-            fn (Request $request): Limit => Limit::perMinute(30)->by($request->ip()),
+            'mcp-oauth',
+            fn (Request $request): Limit => $request->isMethodCacheable()
+                || IpUtils::checkIp((string) $request->ip(), [...ListChatGptEgressRanges::execute(), ...config()->array('trypost.mcp_claude_ip_ranges')])
+                    ? Limit::none()
+                    : Limit::perMinute(30)->by($request->ip()),
         );
 
         RateLimiter::for(
@@ -237,6 +267,12 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for(
             'google-photos-polling',
             fn (Request $request): Limit => Limit::perMinute((int) config('trypost.media_sources.google_photos.polls_per_user_per_minute'))
+                ->by("user:{$request->user()?->id}"),
+        );
+
+        RateLimiter::for(
+            'giphy',
+            fn (Request $request): Limit => Limit::perMinute((int) config('trypost.media_sources.giphy.requests_per_user_per_minute'))
                 ->by("user:{$request->user()?->id}"),
         );
 
@@ -280,9 +316,28 @@ class AppServiceProvider extends ServiceProvider
         });
     }
 
-    protected function configureStripeWebhooks(): void
+    /**
+     * Each MCP token (one AI client, for one user, in one workspace) has its
+     * own budget, so ChatGPT's and Claude's shared addresses and a busy
+     * teammate never spend anyone else's. ChatGPT listing the tools before
+     * sign-in carries no token and is never limited.
+     *
+     * @return list<Limit>
+     */
+    private function mcpLimits(Request $request): array
     {
-        Event::listen(WebhookHandled::class, StripeEventListener::class);
+        $user = $request->user();
+
+        if (blank($user) || ! $this->app->isProduction()) {
+            return [];
+        }
+
+        $token = $user->token()->oauth_access_token_id;
+
+        return [
+            Limit::perMinute(config()->integer('trypost.mcp_requests_per_minute'))->by("minute:{$token}"),
+            Limit::perHour(config()->integer('trypost.mcp_requests_per_hour'))->by("hour:{$token}"),
+        ];
     }
 
     protected function configureSocialite(): void
@@ -334,14 +389,6 @@ class AppServiceProvider extends ServiceProvider
         );
 
         Password::defaults(fn (): Password => PasswordRequirements::rule());
-
-        Nightwatch::rejectCacheEvents(function (CacheEvent $cacheEvent) {
-            return in_array($cacheEvent->key, [
-                'illuminate:foundation:down',
-                'illuminate:queue:restart',
-                'illuminate:schedule:interrupt',
-            ]);
-        });
 
         // Custom email verification template
         VerifyEmail::toMailUsing(function (User $user, string $url) {

@@ -5,27 +5,10 @@ declare(strict_types=1);
 use App\Enums\User\Goal;
 use App\Enums\User\Locale;
 use App\Enums\User\Persona;
+use App\Enums\User\PreviousSoftware;
 use App\Enums\User\Theme;
 use App\Models\User;
 use App\Models\Workspace;
-
-/**
- * Wait for a data-testid element to mount and lay out. Pest browser `@`
- * selectors resolve to data-testid, and assertions do not auto-wait on SPA paint.
- */
-function waitForWelcomeTestId(mixed $page, string $testId): void
-{
-    $page->script(<<<JS
-        (async () => {
-            const sel = '[data-testid="{$testId}"]';
-            for (let i = 0; i < 100; i++) {
-                const el = document.querySelector(sel);
-                if (el && el.getBoundingClientRect().height > 0) return;
-                await new Promise((r) => setTimeout(r, 50));
-            }
-        })();
-    JS);
-}
 
 function welcomeHeaderOwner(): User
 {
@@ -33,6 +16,7 @@ function welcomeHeaderOwner(): User
     $user->update([
         'persona' => Persona::Agency->value,
         'goals' => [Goal::SaveTime->value],
+        'previous_software' => PreviousSoftware::Buffer->value,
     ]);
 
     $workspace = Workspace::factory()->create([
@@ -45,19 +29,57 @@ function welcomeHeaderOwner(): User
     return $user->fresh();
 }
 
-test('the plan step goes back to goals, the step right before it', function () {
+test('the software step goes back to goals, the step right before it', function () {
+    config(['trypost.self_hosted' => false]);
+
+    $this->actingAs(welcomeHeaderOwner());
+
+    $page = visit(route('app.welcome.software'));
+    waitFor($page, '@welcome-back');
+
+    $page->assertVisible('@welcome-step-plan')
+        ->click('@welcome-back');
+    waitFor($page, '@welcome-goals-continue');
+
+    $page->assertRoute('app.welcome.goals')
+        ->assertNoJavaScriptErrors();
+});
+
+test('the software step shows each competitor by its logo and the other options by an icon', function () {
+    config(['trypost.self_hosted' => false]);
+
+    $this->actingAs(welcomeHeaderOwner());
+
+    $page = visit(route('app.welcome.software'));
+
+    foreach (PreviousSoftware::cases() as $software) {
+        if (blank($software->brandName())) {
+            continue;
+        }
+
+        waitForState($page, "@welcome-software-{$software->value}-logo", 'element.complete && element.naturalWidth > 0');
+        $page->assertScript("document.querySelector('[data-testid=\"welcome-software-{$software->value}-logo\"]').naturalWidth > 0");
+    }
+
+    $page->assertMissing('@welcome-software-none-logo')
+        ->assertMissing('@welcome-software-other-logo')
+        ->assertVisible('@welcome-software-none-icon')
+        ->assertVisible('@welcome-software-other-icon')
+        ->assertNoJavaScriptErrors();
+});
+
+test('the plan step goes back to software, the step right before it', function () {
     config(['trypost.self_hosted' => false]);
 
     $this->actingAs(welcomeHeaderOwner());
 
     $page = visit(route('app.welcome.plan'));
-    waitForWelcomeTestId($page, 'welcome-back');
+    waitFor($page, '@welcome-back');
 
-    $page->assertMissing('@welcome-step-connect')
-        ->click('@welcome-back');
-    waitForWelcomeTestId($page, 'welcome-goals-continue');
+    $page->click('@welcome-back');
+    waitFor($page, '@welcome-software-continue');
 
-    $page->assertRoute('app.welcome.goals')
+    $page->assertRoute('app.welcome.software')
         ->assertNoJavaScriptErrors();
 });
 
@@ -69,36 +91,22 @@ test('the welcome header switches language through the shared language select an
 
     $this->actingAs($user->fresh());
 
-    $page = visit(route('app.welcome.plan'));
-    waitForWelcomeTestId($page, 'welcome-language-trigger');
+    $page = visit(route('app.welcome.software'));
+    waitFor($page, '@welcome-language-trigger');
 
     $page->assertVisible('@welcome-back')
-        ->assertVisible('@welcome-step-plan')
+        ->assertVisible('@welcome-step-software')
         ->click('@welcome-language-trigger');
-    waitForWelcomeTestId($page, 'welcome-language-search');
+    waitFor($page, '@welcome-language-search');
 
     $page->fill('@welcome-language-search', 'Português')
         ->click('@welcome-language-option-pt-BR');
-    $page->script(<<<'JS'
-        (async () => {
-            for (let i = 0; i < 100; i++) {
-                if (document.querySelector('[data-testid="welcome-language-value"]')?.textContent.includes('Portugu')) return;
-                await new Promise((r) => setTimeout(r, 50));
-            }
-        })();
-    JS);
+    waitForState($page, '@welcome-language-value', "element.textContent.includes('Portugu')");
 
     expect($user->fresh()->locale)->toBe(Locale::PortugueseBrazil);
 
-    $page->click('@theme-toggle-dark');
-    $page->script(<<<'JS'
-        (async () => {
-            for (let i = 0; i < 100; i++) {
-                if (document.documentElement.classList.contains('dark')) return;
-                await new Promise((r) => setTimeout(r, 50));
-            }
-        })();
-    JS);
+    $page->click('@theme-toggle');
+    waitForState($page, 'html', "element.classList.contains('dark')");
     $page->assertNoJavaScriptErrors();
 
     expect($user->fresh()->theme)->toBe(Theme::Dark);

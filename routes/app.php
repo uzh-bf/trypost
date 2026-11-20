@@ -6,21 +6,26 @@ use App\Enums\Analytics\ExportFormat;
 use App\Http\Controllers\App\ApiKeyController;
 use App\Http\Controllers\App\BillingController;
 use App\Http\Controllers\App\CanvaController;
+use App\Http\Controllers\App\ChangelogEntryReactionController;
+use App\Http\Controllers\App\ChangelogEntryViewController;
 use App\Http\Controllers\App\ChannelController;
 use App\Http\Controllers\App\ChannelPostingScheduleController;
 use App\Http\Controllers\App\ChannelQueueController;
 use App\Http\Controllers\App\ComposerAccountDataController;
 use App\Http\Controllers\App\ComposerLiveDataController;
 use App\Http\Controllers\App\DiscordController as AppDiscordController;
+use App\Http\Controllers\App\GiphyController;
 use App\Http\Controllers\App\GoogleMediaController;
 use App\Http\Controllers\App\GooglePhotosSessionController;
 use App\Http\Controllers\App\IdeaController;
 use App\Http\Controllers\App\IdeaGenerateController;
 use App\Http\Controllers\App\IdeaStageController;
 use App\Http\Controllers\App\InsightsController;
+use App\Http\Controllers\App\InstagramAudioController;
 use App\Http\Controllers\App\LibraryTemplateController;
 use App\Http\Controllers\App\LinkPreviewController;
 use App\Http\Controllers\App\LinkPreviewMediaController;
+use App\Http\Controllers\App\McpPromptController;
 use App\Http\Controllers\App\McpSettingsController;
 use App\Http\Controllers\App\MediaAltTextController;
 use App\Http\Controllers\App\MediaFileController;
@@ -33,6 +38,8 @@ use App\Http\Controllers\App\PostController;
 use App\Http\Controllers\App\PostGroupController;
 use App\Http\Controllers\App\PostLabelController;
 use App\Http\Controllers\App\PostNoteController;
+use App\Http\Controllers\App\PostNoteMentionableController;
+use App\Http\Controllers\App\PostNoteReactionController;
 use App\Http\Controllers\App\PostRecurrenceController;
 use App\Http\Controllers\App\PostScheduleController;
 use App\Http\Controllers\App\PostTemplateController;
@@ -42,14 +49,18 @@ use App\Http\Controllers\App\RepurposeController;
 use App\Http\Controllers\App\RssFeedCollectionController;
 use App\Http\Controllers\App\RssFeedController;
 use App\Http\Controllers\App\RssFeedItemController;
-use App\Http\Controllers\App\Settings\AuthenticationController;
+use App\Http\Controllers\App\Settings\ConnectedAccountController;
 use App\Http\Controllers\App\Settings\NotificationPreferenceController;
+use App\Http\Controllers\App\Settings\PasswordController;
 use App\Http\Controllers\App\Settings\PreferencesController;
 use App\Http\Controllers\App\Settings\ProfileController;
+use App\Http\Controllers\App\Settings\SessionController;
+use App\Http\Controllers\App\TourController;
 use App\Http\Controllers\App\UnsplashController;
 use App\Http\Controllers\App\WebhookController;
 use App\Http\Controllers\App\WelcomeController;
 use App\Http\Controllers\App\WorkspaceController;
+use App\Http\Controllers\App\WorkspaceCreationCheckController;
 use App\Http\Controllers\App\WorkspaceInviteController;
 use App\Http\Controllers\App\WorkspaceLabelController;
 use App\Http\Controllers\App\WorkspaceSignatureController;
@@ -87,6 +98,8 @@ Route::middleware(['auth'])->group(function () {
     Route::post('welcome/persona', [WelcomeController::class, 'storePersona'])->name('app.welcome.persona.store');
     Route::get('welcome/goals', [WelcomeController::class, 'goals'])->name('app.welcome.goals');
     Route::post('welcome/goals', [WelcomeController::class, 'storeGoals'])->name('app.welcome.goals.store');
+    Route::get('welcome/software', [WelcomeController::class, 'software'])->name('app.welcome.software');
+    Route::post('welcome/software', [WelcomeController::class, 'storeSoftware'])->name('app.welcome.software.store');
     Route::get('welcome/plan', [WelcomeController::class, 'plan'])->name('app.welcome.plan');
     Route::post('welcome/plan', [WelcomeController::class, 'storePlan'])
         ->middleware('throttle:6,1')
@@ -94,11 +107,20 @@ Route::middleware(['auth'])->group(function () {
     Route::post('referral-source', [ReferralSourceController::class, 'store'])
         ->middleware('throttle:6,1')
         ->name('app.referral-source.store');
+    Route::post('changelog/{changelogEntry}/views', [ChangelogEntryViewController::class, 'store'])
+        ->middleware('throttle:60,1')
+        ->name('app.changelog.views.store');
+    Route::put('changelog/{changelogEntry}/reaction', [ChangelogEntryReactionController::class, 'update'])
+        ->middleware('throttle:60,1')
+        ->name('app.changelog.reaction.update');
     Route::get('welcome/subscription-required', [WelcomeController::class, 'subscriptionRequired'])->name('app.welcome.subscription-required');
     Route::get('billing/processing', [BillingController::class, 'processing'])->name('app.billing.processing');
 
     Route::get('workspaces/create', [WorkspaceController::class, 'create'])->name('app.workspaces.create');
     Route::post('workspaces', [WorkspaceController::class, 'store'])->name('app.workspaces.store');
+    Route::post('workspaces/creation-check', [WorkspaceCreationCheckController::class, 'store'])
+        ->middleware('throttle:30,1')
+        ->name('app.workspaces.creation-check.store');
 });
 
 Route::middleware(['auth'])->group(function () {
@@ -172,6 +194,14 @@ Route::middleware(['auth', EnsureAccountReady::class, EnsureHasWorkspace::class]
         ->middleware('throttle:60,1')
         ->name('app.discord.mentions');
 
+    Route::get('instagram/accounts/{account}/audio', [InstagramAudioController::class, 'index'])
+        ->middleware('throttle:60,1')
+        ->name('app.instagram.audio.index');
+    Route::get('instagram/accounts/{account}/audio/{audioId}', [InstagramAudioController::class, 'show'])
+        ->whereNumber('audioId')
+        ->middleware('throttle:60,1')
+        ->name('app.instagram.audio.show');
+
     Route::get('pinterest/accounts/{account}/boards', [PinterestBoardController::class, 'index'])
         ->middleware('throttle:30,1')
         ->name('app.pinterest.boards.index');
@@ -195,6 +225,7 @@ Route::middleware(['auth', EnsureAccountReady::class, EnsureHasWorkspace::class]
     Route::get('channels/{account}/calendar/{view?}', [ChannelController::class, 'calendar'])
         ->where('view', 'days|week|month')
         ->name('app.channels.calendar');
+    Route::get('channels/{account}/board', [ChannelController::class, 'board'])->name('app.channels.board');
     Route::get('channels/{account}/insights', [ChannelController::class, 'insights'])->name('app.channels.insights');
     Route::get('channels/{account}/insights/download/{format}', [ChannelController::class, 'downloadInsights'])
         ->whereIn('format', ExportFormat::values())
@@ -217,6 +248,7 @@ Route::middleware(['auth', EnsureAccountReady::class, EnsureHasWorkspace::class]
     Route::get('schedule/calendar/{view?}', [PostController::class, 'calendar'])
         ->where('view', 'days|week|month')
         ->name('app.calendar');
+    Route::get('schedule/board', [PostController::class, 'board'])->name('app.posts.board');
 
     Route::get('posts/composer/live', ComposerLiveDataController::class)->name('app.posts.composer.live');
     Route::get('posts/composer/accounts/{account}', [ComposerAccountDataController::class, 'show'])->name('app.posts.composer.account');
@@ -248,10 +280,13 @@ Route::middleware(['auth', EnsureAccountReady::class, EnsureHasWorkspace::class]
         ->middleware('throttle:10,1')
         ->name('app.posts.ai.alt-text');
 
-    Route::get('posts/{post}/notes', [PostNoteController::class, 'index'])->name('app.posts.notes.index');
+    Route::get('posts/{post}/notes/mentionables', [PostNoteMentionableController::class, 'index'])->name('app.posts.notes.mentionables.index');
     Route::post('posts/{post}/notes', [PostNoteController::class, 'store'])->name('app.posts.notes.store');
+    Route::get('posts/{post}/notes/{note}', [PostNoteController::class, 'show'])->name('app.posts.notes.show');
     Route::put('posts/{post}/notes/{note}', [PostNoteController::class, 'update'])->name('app.posts.notes.update');
     Route::delete('posts/{post}/notes/{note}', [PostNoteController::class, 'destroy'])->name('app.posts.notes.destroy');
+    Route::put('posts/{post}/notes/{note}/reactions', [PostNoteReactionController::class, 'update'])->name('app.posts.notes.reactions.update');
+    Route::delete('posts/{post}/notes/{note}/reactions', [PostNoteReactionController::class, 'destroy'])->name('app.posts.notes.reactions.destroy');
 
     Route::get('settings/workspace/members', [WorkspaceInviteController::class, 'index'])->name('app.members');
     Route::post('settings/workspace/members/invites', [WorkspaceInviteController::class, 'store'])->name('app.invites.store');
@@ -267,9 +302,12 @@ Route::middleware(['auth', EnsureAccountReady::class, EnsureHasWorkspace::class]
     Route::post('media/chunked', [MediaUploadController::class, 'storeChunked'])->name('app.media.store-chunked');
     Route::get('media/{media}/file', [MediaFileController::class, 'show'])->whereUuid('media')->name('app.media.file');
     Route::get('media/{media}/view', [MediaFileController::class, 'view'])->whereUuid('media')->name('app.media.view');
-    Route::post('media/from-url', [MediaUploadController::class, 'storeFromUrl'])
-        ->middleware('throttle:media-imports')
-        ->name('app.media.store-from-url');
+    Route::get('media/giphy/search', [GiphyController::class, 'search'])
+        ->middleware('throttle:giphy')
+        ->name('app.media.giphy.search');
+    Route::get('media/giphy/trending', [GiphyController::class, 'trending'])
+        ->middleware('throttle:giphy')
+        ->name('app.media.giphy.trending');
     Route::get('media/unsplash/search', [UnsplashController::class, 'search'])
         ->middleware('throttle:unsplash')
         ->name('app.media.unsplash.search');
@@ -361,6 +399,16 @@ Route::middleware(['auth', EnsureAccountReady::class, EnsureHasWorkspace::class]
 
     Route::get('settings/workspace/mcp', [McpSettingsController::class, 'index'])->name('app.mcp.index');
     Route::delete('settings/workspace/mcp/{client}', [McpSettingsController::class, 'disconnect'])->name('app.mcp.disconnect');
+    Route::get('settings/workspace/mcp/prompt', [McpPromptController::class, 'show'])
+        ->middleware('throttle:60,1')
+        ->name('app.mcp.prompt.show');
+    Route::post('settings/workspace/mcp/prompt', [McpPromptController::class, 'store'])
+        ->middleware('throttle:30,1')
+        ->name('app.mcp.prompt.store');
+
+    Route::post('tours', [TourController::class, 'store'])
+        ->middleware('throttle:30,1')
+        ->name('app.tours.store');
 
     Route::get('repurposes', [RepurposeController::class, 'index'])->name('app.repurposes.index');
     Route::post('repurposes', [RepurposeController::class, 'store'])->name('app.repurposes.store');
@@ -384,6 +432,7 @@ Route::middleware(['auth', EnsureAccountReady::class, EnsureHasWorkspace::class]
     Route::get('settings/account/billing', [BillingController::class, 'index'])->name('app.billing.index');
     Route::get('settings/account/billing/portal', [BillingController::class, 'portal'])->name('app.billing.portal');
     Route::post('settings/account/billing/change-plan', [BillingController::class, 'changePlan'])->name('app.billing.change-plan');
+    Route::post('settings/account/billing/checkout', [BillingController::class, 'checkout'])->name('app.billing.checkout');
 
 });
 
@@ -401,16 +450,15 @@ Route::middleware(['auth'])->group(function () {
 Route::middleware(['auth'])->group(function () {
     Route::delete('settings/profile', [ProfileController::class, 'destroy'])->name('app.profile.destroy');
 
-    Route::get('settings/authentication', [AuthenticationController::class, 'edit'])->name('app.authentication.edit');
-    Route::put('settings/authentication/password', [AuthenticationController::class, 'updatePassword'])
+    Route::put('settings/profile/password', [PasswordController::class, 'update'])
         ->middleware('throttle:6,1')
-        ->name('app.authentication.update-password');
-    Route::delete('settings/authentication/sessions', [AuthenticationController::class, 'destroyOtherSessions'])
-        ->name('app.authentication.destroy-other-sessions');
-    Route::get('settings/authentication/providers/{provider}/connect', [AuthenticationController::class, 'connectProvider'])
-        ->name('app.authentication.connect-provider');
-    Route::delete('settings/authentication/providers/{provider}', [AuthenticationController::class, 'disconnectProvider'])
-        ->name('app.authentication.disconnect-provider');
+        ->name('app.profile.password.update');
+    Route::delete('settings/profile/sessions', [SessionController::class, 'destroyOthers'])
+        ->name('app.profile.sessions.destroy-others');
+    Route::get('settings/profile/connected-accounts/{provider}/connect', [ConnectedAccountController::class, 'connect'])
+        ->name('app.profile.connected-accounts.connect');
+    Route::delete('settings/profile/connected-accounts/{provider}', [ConnectedAccountController::class, 'destroy'])
+        ->name('app.profile.connected-accounts.destroy');
 
     Route::get('settings/profile/notifications', [NotificationPreferenceController::class, 'edit'])->name('app.notifications.preferences');
     Route::patch('settings/profile/notifications', [NotificationPreferenceController::class, 'update'])->name('app.notifications.preferences.update');

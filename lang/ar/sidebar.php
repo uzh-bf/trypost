@@ -7,6 +7,7 @@ return [
     'select_workspace' => 'اختر مساحة العمل',
     'create_workspace' => 'إنشاء مساحة عمل',
     'new' => 'جديد',
+    'unfinished_post' => 'لديك منشور لم تُكمله',
     'create' => 'إنشاء',
     'new_menu' => [
         'post' => 'منشور',
@@ -48,6 +49,7 @@ return [
         'github' => 'GitHub',
         'status' => 'حالة التطبيق',
         'chat' => 'الدعم عبر الدردشة',
+        'changelog' => 'ما الجديد',
         'referral' => 'اربح عمولة إحالة 30%',
         'discord' => 'مجتمع Discord',
         'community' => 'المجتمع',

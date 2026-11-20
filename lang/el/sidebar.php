@@ -7,6 +7,7 @@ return [
     'select_workspace' => 'Επιλογή workspace',
     'create_workspace' => 'Δημιουργία workspace',
     'new' => 'Νέο',
+    'unfinished_post' => 'Έχετε μια ανάρτηση που δεν ολοκληρώσατε',
     'create' => 'Δημιουργία',
     'new_menu' => [
         'post' => 'Ανάρτηση',
@@ -48,6 +49,7 @@ return [
         'github' => 'GitHub',
         'status' => 'Κατάσταση εφαρμογής',
         'chat' => 'Υποστήριξη μέσω chat',
+        'changelog' => 'Τι νέο υπάρχει',
         'referral' => 'Κερδίστε 30% από συστάσεις',
         'discord' => 'Κοινότητα Discord',
         'community' => 'Κοινότητα',

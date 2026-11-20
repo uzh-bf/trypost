@@ -4,10 +4,13 @@ import { IconPlus, IconSettings, IconTag, IconX } from '@tabler/icons-vue';
 import { computed, ref } from 'vue';
 
 import FilterEmptyState from '@/components/FilterEmptyState.vue';
+import LabelBadge from '@/components/labels/LabelBadge.vue';
 import LabelForm from '@/components/labels/LabelForm.vue';
 import MultiSelectFilter from '@/components/MultiSelectFilter.vue';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { filled } from '@/lib/helpers';
+import { matchesSearch } from '@/lib/search';
 import {
     index as labelsIndex,
     store as labelsStore,
@@ -49,9 +52,6 @@ const labelsById = computed(
 
 const labelFor = (id: string): Label => labelsById.value.get(id)!;
 
-const matches = (text: string, search: string): boolean =>
-    text.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase());
-
 const DEFAULT_COLOR = '#7c3aed';
 
 const creating = ref(false);
@@ -84,6 +84,22 @@ const saveLabel = (): void => {
         },
     });
 };
+
+/**
+ * The footer (clear, settings) shows while there are labels, and also while a
+ * selection is left that none of them can undo: a deleted label still in the URL.
+ */
+const showsFooter = computed((): boolean => {
+    if (filled(props.labels)) {
+        return true;
+    }
+
+    if (untagged.value) {
+        return true;
+    }
+
+    return filled(selectedIds.value);
+});
 
 const clear = (): void => {
     selectedIds.value = [];
@@ -170,9 +186,9 @@ const clear = (): void => {
             <IconTag class="size-4" />
         </template>
         <template #before-options="{ search }">
-            <div v-if="showUntagged && labels.length > 0" class="pt-2">
+            <div v-if="showUntagged && labels.length > 0">
                 <label
-                    v-if="matches($t('posts.label_filter_untagged'), search)"
+                    v-if="matchesSearch(search, [$t('posts.label_filter_untagged')])"
                     class="flex min-h-8 cursor-pointer items-center gap-3 rounded-lg px-2 py-1.5 text-sm leading-5 transition-control hover:bg-accent"
                     :class="{ 'bg-accent': untagged }"
                     :data-testid="`${testId}-untagged`"
@@ -196,16 +212,10 @@ const clear = (): void => {
             </div>
         </template>
         <template #option="{ option }">
-            <span
-                class="flex min-w-0 items-center gap-2.5 text-sm leading-5 text-foreground"
-            >
-                <span
-                    class="size-2.5 shrink-0 rounded-full"
-                    :style="{ backgroundColor: labelFor(option.id).color }"
-                    aria-hidden="true"
-                />
-                <span class="truncate">{{ labelFor(option.id).name }}</span>
-            </span>
+            <LabelBadge
+                :label="labelFor(option.id)"
+                :data-testid="`${testId}-chip-${option.id}`"
+            />
         </template>
         <template v-if="labels.length === 0" #empty>
             <FilterEmptyState
@@ -224,7 +234,7 @@ const clear = (): void => {
                 </Button>
             </FilterEmptyState>
         </template>
-        <template v-if="labels.length > 0" #footer>
+        <template v-if="showsFooter" #footer>
             <div
                 class="-mx-3 mt-2 flex items-center justify-between border-t border-border px-3 pt-2"
             >

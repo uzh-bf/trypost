@@ -35,7 +35,20 @@ class DiscordClient
 
     public function baseUrl(): string
     {
-        return (string) config('trypost.platforms.discord.api');
+        return config('trypost.platforms.discord.api');
+    }
+
+    /**
+     * The guild's channels when a recent `channels()` call left them in the
+     * cache, without asking Discord: null when they are not cached.
+     *
+     * @return list<array{id: string, name: string}>|null
+     */
+    public function cachedChannels(string $guildId): ?array
+    {
+        $channels = Cache::get($this->channelsCacheKey($guildId));
+
+        return is_array($channels) ? $channels : null;
     }
 
     /**
@@ -54,7 +67,7 @@ class DiscordClient
         // both in the composer picker and on every publish (the channel guard),
         // all against the shared, rate-limited bot token. A transient failure
         // throws and is NOT cached, so the next call retries.
-        return Cache::remember("discord:channels:{$guildId}", self::CHANNELS_TTL, function () use ($guildId) {
+        return Cache::remember($this->channelsCacheKey($guildId), self::CHANNELS_TTL, function () use ($guildId) {
             $response = $this->bot()->get("{$this->baseUrl()}/guilds/{$guildId}/channels");
 
             if ($response->failed()) {
@@ -80,6 +93,11 @@ class DiscordClient
                 ->values()
                 ->all();
         });
+    }
+
+    private function channelsCacheKey(string $guildId): string
+    {
+        return "discord:channels:{$guildId}";
     }
 
     /**

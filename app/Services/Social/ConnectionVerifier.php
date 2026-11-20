@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Services\Social;
 
+use App\Actions\SocialAccount\ReadBlueskySession;
 use App\Actions\SocialAccount\SyncXSubscription;
-use App\Dto\BlueskySession;
 use App\Enums\SocialAccount\Platform;
 use App\Exceptions\PlatformUnavailableException;
 use App\Exceptions\Social\BlueskyPublishException;
@@ -21,12 +21,14 @@ use App\Exceptions\Social\YouTubePublishException;
 use App\Exceptions\TokenExpiredException;
 use App\Models\SocialAccount;
 use App\Services\Social\Discord\DiscordClient;
+use App\Services\Social\Mastodon\MastodonApi;
 use App\Services\Social\Meta\GraphError;
 use App\Services\Social\Telegram\TelegramApi;
 use App\Support\GoogleBusinessResourceName;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 
 class ConnectionVerifier
@@ -206,7 +208,8 @@ class ConnectionVerifier
             Platform::LinkedIn => $this->verifyLinkedIn($account),
             Platform::LinkedInPage => $this->verifyLinkedInPage($account),
             Platform::X => $this->verifyX($account),
-            Platform::Instagram, Platform::InstagramFacebook => $this->verifyInstagram($account),
+            Platform::Instagram => $this->verifyInstagram($account),
+            Platform::InstagramFacebook => $this->verifyInstagramFacebook($account),
             Platform::Facebook => $this->verifyFacebook($account),
             Platform::Threads => $this->verifyThreads($account),
             Platform::TikTok => $this->verifyTikTok($account),
@@ -336,12 +339,15 @@ class ConnectionVerifier
 
     private function refreshBlueskyToken(SocialAccount $account): void
     {
-        $service = $account->meta['service'] ?? config('trypost.platforms.bluesky.default_service');
+        $service = $account->bluesky_service;
         $client = TokenRefreshClient::for(Platform::Bluesky);
 
         try {
+            // refreshSession must be POSTed with NO body: `post()` without data
+            // still sends an empty JSON body, and bsky.social now rejects it
+            // with "A request body was provided when none was expected".
             $response = $client->send(fn () => $this->refreshHttp()->withToken($account->refresh_token)
-                ->post("{$service}/xrpc/".BlueskyLexicon::REFRESH_SESSION));
+                ->send('POST', BlueskyLexicon::xrpc($service, BlueskyLexicon::REFRESH_SESSION)));
 
             $this->updateBlueskySession($account, $response);
 
@@ -352,7 +358,7 @@ class ConnectionVerifier
 
         if (isset($account->meta['password'])) {
             try {
-                $reauth = $client->send(fn () => $this->refreshHttp()->post("{$service}/xrpc/".BlueskyLexicon::CREATE_SESSION, [
+                $reauth = $client->send(fn () => $this->refreshHttp()->post(BlueskyLexicon::xrpc($service, BlueskyLexicon::CREATE_SESSION), [
                     'identifier' => $account->meta['identifier'],
                     'password' => decrypt($account->meta['password']),
                 ]));
@@ -370,7 +376,7 @@ class ConnectionVerifier
 
     private function updateBlueskySession(SocialAccount $account, Response $response): void
     {
-        $session = BlueskySession::fromResponse($response);
+        $session = ReadBlueskySession::execute($response);
 
         if ($session === null || ! $session->hasTokens() || $session->did !== $account->platform_user_id) {
             throw new PlatformUnavailableException('Bluesky returned an invalid session response.');
@@ -575,14 +581,14 @@ class ConnectionVerifier
         $account->refresh();
     }
 
+    /**
+     * The OpenID Connect userinfo endpoint lives under `/v2`, not the versioned
+     * `/rest` API, so it takes no LinkedIn-Version header.
+     */
     private function verifyLinkedIn(SocialAccount $account): bool
     {
         $response = Http::withToken($account->access_token)
-            ->withHeaders([
-                'X-Restli-Protocol-Version' => '2.0.0',
-                'LinkedIn-Version' => '202601',
-            ])
-            ->get(config('trypost.platforms.linkedin.api').'/rest/userinfo');
+            ->get(config('trypost.platforms.linkedin.api').'/v2/userinfo');
 
         if (LinkedInPublishException::isConfirmedDeadToken($response)) {
             throw new TokenExpiredException('LinkedIn access token is invalid or expired');
@@ -644,15 +650,35 @@ class ConnectionVerifier
         );
     }
 
+    /**
+     * An Instagram Login token, checked on graph.instagram.com. Its `user_id`
+     * is the professional account id, kept for matching the same account
+     * connected through Facebook.
+     */
     private function verifyInstagram(SocialAccount $account): bool
     {
-        // Basic Instagram tokens hit graph.instagram.com; Instagram via
-        // Facebook Business uses a Facebook Page token, which only validates
-        // against graph.facebook.com — using the wrong endpoint produces a
-        // false-positive "token expired".
-        $baseUrl = $account->platform->instagramGraphBaseUrl();
+        $response = Http::get("{$account->platform->graphApiUrl()}/me", [
+            'fields' => 'id,username,user_id',
+            'access_token' => $account->access_token,
+        ]);
 
-        $response = Http::get("{$baseUrl}/me", [
+        if ($response->successful()) {
+            $this->rememberInstagramAccountId($account, $response->json('user_id'));
+
+            return true;
+        }
+
+        throw GraphError::classifyVerifyFailure($response, 'Instagram');
+    }
+
+    /**
+     * An Instagram account connected through Facebook holds a Page token, which
+     * only validates on graph.facebook.com (graph.instagram.com reports it as
+     * expired). Its `/me` is the Page, which has no `user_id`.
+     */
+    private function verifyInstagramFacebook(SocialAccount $account): bool
+    {
+        $response = Http::get("{$account->platform->graphApiUrl()}/me", [
             'fields' => 'id,username',
             'access_token' => $account->access_token,
         ]);
@@ -662,6 +688,31 @@ class ConnectionVerifier
         }
 
         throw GraphError::classifyVerifyFailure($response, 'Instagram');
+    }
+
+    /**
+     * Keeps the Instagram professional account id of an Instagram Login
+     * account (older accounts were connected before it was stored), so a
+     * reconnect through Facebook matches it without asking Instagram. The key
+     * is added to the meta read again under a row lock, so meta saved
+     * meanwhile (a reconnect) is kept, and `updated_at` does not move.
+     */
+    private function rememberInstagramAccountId(SocialAccount $account, mixed $instagramAccountId): void
+    {
+        $id = (string) $instagramAccountId;
+
+        if (blank($id) || data_get($account->meta, 'ig_user_id') === $id) {
+            return;
+        }
+
+        $account->meta = DB::transaction(function () use ($account, $id): array {
+            $stored = SocialAccount::query()->lockForUpdate()->findOrFail($account->getKey());
+            $stored->meta = [...$stored->meta ?? [], 'ig_user_id' => $id];
+            SocialAccount::withoutTimestamps(fn () => $stored->saveQuietly());
+
+            return $stored->meta;
+        });
+        $account->syncOriginalAttribute('meta');
     }
 
     private function verifyFacebook(SocialAccount $account): bool
@@ -763,10 +814,10 @@ class ConnectionVerifier
 
     private function verifyBluesky(SocialAccount $account): bool
     {
-        $service = $account->meta['service'] ?? config('trypost.platforms.bluesky.default_service');
+        $service = $account->bluesky_service;
 
         $response = Http::withToken($account->access_token)
-            ->get("{$service}/xrpc/".BlueskyLexicon::GET_PROFILE, [
+            ->get(BlueskyLexicon::xrpc($service, BlueskyLexicon::GET_PROFILE), [
                 'actor' => $account->platform_user_id,
             ]);
 
@@ -820,10 +871,10 @@ class ConnectionVerifier
 
     private function verifyMastodon(SocialAccount $account): bool
     {
-        $instance = $account->meta['instance'] ?? config('trypost.platforms.mastodon.default_instance');
+        $instance = $account->mastodon_instance;
 
         $response = Http::withToken($account->access_token)
-            ->get("{$instance}/api/v1/accounts/verify_credentials");
+            ->get(MastodonApi::url($instance, 'accounts/verify_credentials'));
 
         // 403 here (unlike a publish-time 403 on the write-scoped /statuses
         // endpoint) means even read access is gone — verify_credentials is

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 return [
     'title' => 'Ustawienia',
     'description' => 'Zarządzaj swoim profilem i ustawieniami konta',
@@ -9,13 +11,11 @@ return [
         'groups' => [
             'personal' => 'Osobiste',
             'workspace' => 'Przestrzeń robocza',
-            'features' => 'Funkcje',
-            'developers' => 'Deweloperzy',
-            'account' => 'Konto',
+            'content' => 'Treści',
+            'integrations' => 'Integracje',
         ],
         'items' => [
             'profile' => 'Profil',
-            'authentication' => 'Uwierzytelnianie',
             'notifications' => 'Powiadomienia',
             'preferences' => 'Preferencje',
             'general' => 'Ogólne',
@@ -24,7 +24,7 @@ return [
             'signatures' => 'Sygnatury',
             'labels' => 'Etykiety',
             'webhooks' => 'Webhooki',
-            'api_keys' => 'Klucze API',
+            'api_keys' => 'API',
             'mcp' => 'MCP',
             'billing' => 'Rozliczenia',
         ],
@@ -41,7 +41,7 @@ return [
         'account_disconnected' => 'Konto rozłączone',
         'account_disconnected_description' => 'Otrzymuj e-mail, gdy konto społecznościowe zostanie rozłączone',
         'post_note_added' => 'Nowa notatka do posta',
-        'post_note_added_description' => 'Otrzymuj e-mail, gdy członek zespołu doda notatkę do posta',
+        'post_note_added_description' => 'Otrzymuj e-mail, gdy członek zespołu wspomni o Tobie w notatce lub doda notatkę do posta, który utworzono lub skomentowano z Twojego konta',
         'collaboration' => 'Współpraca',
         'collaboration_description' => 'Otrzymuj e-maile o prośbach o zatwierdzenie oraz zatwierdzonych lub odrzuconych postach',
         'save_failed' => 'Nie udało się zapisać preferencji powiadomień. Spróbuj ponownie.',
@@ -100,27 +100,23 @@ return [
         'resend_verification' => 'Kliknij tutaj, aby ponownie wysłać e-mail weryfikacyjny.',
         'verification_sent' => 'Nowy link weryfikacyjny został wysłany na Twój adres e-mail.',
         'save' => 'Zapisz',
-    ],
-
-    'authentication' => [
-        'title' => 'Uwierzytelnianie',
-        'page_title' => 'Ustawienia uwierzytelniania',
+        'tabs' => [
+            'profile' => 'Profil',
+            'login' => 'Hasło i logowanie',
+            'sessions' => 'Sesje',
+        ],
         'sessions' => [
             'title' => 'Aktywne sesje',
             'description' => 'Jeśli zauważysz coś podejrzanego, wyloguj się z innych urządzeń.',
             'unknown_browser' => 'Nieznana przeglądarka',
-            'unknown_ip' => 'Nieznany adres IP',
             'on' => 'w',
             'active_now' => 'Aktywna teraz',
+            'last_activity' => 'Ostatnia aktywność :time',
             'log_out_others' => 'Wyloguj inne urządzenia',
             'modal_title' => 'Wyloguj inne urządzenia',
-            'modal_description_password' => 'Wprowadź swoje aktualne hasło, aby potwierdzić chęć wylogowania innych sesji przeglądarki.',
-            'modal_description_email' => 'Wpisz swój adres e-mail, aby potwierdzić chęć wylogowania innych sesji przeglądarki.',
-            'password_placeholder' => 'Aktualne hasło',
-            'email_placeholder' => 'E-mail Twojego konta',
+            'modal_description' => 'Wszystkie inne urządzenia zalogowane na Twoje konto zostaną wylogowane. Ta sesja pozostanie aktywna.',
             'cancel' => 'Anuluj',
             'submit' => 'Wyloguj inne urządzenia',
-            'email_mismatch' => 'Adres e-mail nie zgadza się z Twoim kontem.',
             'flash_logged_out' => 'Zostałeś wylogowany z innych urządzeń.',
         ],
         'password' => [

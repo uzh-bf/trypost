@@ -7,6 +7,8 @@ return [
     'description' => 'Manage this workspace\'s connected channels.',
     'connect' => 'Connect channel',
     'settings' => 'Channel settings',
+    'manage' => 'Manage channels',
+    'set_goal' => 'Set a posting goal',
     'publish' => 'Publish',
     'insights' => 'Insights',
     'new_post' => 'New post in this channel',
@@ -16,14 +18,13 @@ return [
     'connection_lost_hint' => 'Reconnect this channel to keep publishing.',
     'reconnect' => 'Reconnect',
     'refresh_connection' => 'Refresh connection',
+    'link_facebook_page' => 'Link to a Facebook Page',
     'view_profile' => 'View profile',
     'disconnect' => 'Disconnect',
     'actions' => 'Channel actions',
 
     'reorder' => [
         'handle' => 'Drag to reorder :name',
-        'move_up' => 'Move up',
-        'move_down' => 'Move down',
         'failed' => 'Could not reorder your channels. Try again.',
         'stale' => 'Your channels changed since you loaded the page. Refresh and try again.',
     ],
@@ -169,6 +170,25 @@ return [
         'description' => 'This deletes every post of this channel in TryPost, including drafts, scheduled posts and published history. Posts already on the network stay there.',
         'keyword' => 'disconnect',
         'cancel' => 'Cancel',
+    ],
+
+    'list' => [
+        'search' => 'Search by name, @username or network',
+        'networks' => 'Networks',
+        'networks_search' => 'Search networks',
+        'no_networks' => 'No networks found',
+        'columns' => [
+            'channel' => 'Channel',
+            'timezone' => 'Time zone',
+            'posting_times' => 'Posting times',
+            'this_week' => 'This week',
+        ],
+        'posting_times_per_week' => ':count per week',
+        'no_posting_times' => 'No posting times',
+        'no_results' => 'No channels match your search.',
+        'connection_lost' => 'This channel lost its connection',
+        'settings' => 'Settings',
+        'more_actions' => 'More actions',
     ],
 
     'settings_page' => [

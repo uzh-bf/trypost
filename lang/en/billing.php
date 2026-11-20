@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 return [
     'title' => 'Billing',
 
@@ -12,7 +14,6 @@ return [
     'subscribe' => [
         'billed_monthly' => 'Billed monthly',
         'prices' => [
-            'first_month' => '$1',
             'socials' => ['monthly' => '$19', 'yearly_per_month' => '$15.83', 'yearly' => '$190'],
             'workspaces' => ['monthly' => '$99', 'yearly_per_month' => '$82.50', 'yearly' => '$990'],
         ],
@@ -24,6 +25,7 @@ return [
         'yearly' => 'Yearly',
         'save_two_months' => '2 months free',
         'per_month' => '/month',
+        'per_year' => '/year',
         'workspaces_one' => 'One workspace',
         'workspaces_unlimited' => 'Unlimited workspaces',
         'workspaces_tooltip' => 'A workspace is one brand or client, kept separate from the rest: its own social accounts, signatures, labels, analytics, member permissions, and MCP connection.',
@@ -33,54 +35,70 @@ return [
         'select' => 'Choose :plan',
         'upgrade' => 'Upgrade to :plan',
         'downgrade' => 'Downgrade to :plan',
-        'start_first_month' => 'Start for :price',
-        'per_first_month' => '/first month',
-        'then_monthly' => 'Then :price/month',
         'billed_yearly_total' => 'Billed annually · :price (2 months free)',
         'socials_tagline' => 'Best for creators and small brands.',
         'workspaces_tagline' => 'Best for agencies and larger businesses.',
         'everything_included' => 'Everything included',
         'features' => [
             'networks_all' => 'All social networks included',
-            'networks_all_tooltip' => 'You can post to every one of these.',
+            'networks_all_tooltip' => 'Post to all of them from one place.',
             'accounts_unlimited' => 'Unlimited social accounts',
             'accounts_unlimited_tooltip' => 'Connect as many accounts as you want, even several from the same network. Three Instagrams, for example.',
-            'calendar' => 'Calendar: month and week views',
-            'calendar_tooltip' => 'See your whole month at a glance: what\'s planned, scheduled, and already published. Switch to week when you need the detail.',
-            'ai' => 'TryPost Copilot',
-            'ai_tooltip' => 'Your AI assistant for writing and reviewing posts.',
-            'mcp' => 'MCP: post from Claude, ChatGPT, or Grok',
-            'mcp_tooltip' => 'Connect Claude, ChatGPT, or Grok to your workspace. Ask it to create and schedule posts, pull metrics, spot what performed best, and plan what comes next from your own data.',
-            'repurpose' => 'Repurpose: turn one post into many',
-            'repurpose_tooltip' => 'Choose a source account. Every new post you publish there is automatically republished to your other networks. You don\'t need to open TryPost.',
-            'analytics' => 'Analytics',
-            'analytics_tooltip' => 'Get metrics like impressions, reach, likes, and comments for every post and every account, all in one place.',
-            'team' => 'Unlimited members',
+            'calendar' => 'Content calendar',
+            'ideas' => 'Content planning',
+            'ideas_tooltip' => 'Jot down your ideas, keep them organized in one place and turn the best ones into content whenever you want.',
+            'calendar_tooltip' => 'See every scheduled and published post in one place, by month or by week.',
+            'ai' => 'AI writing assistant',
+            'ai_tooltip' => 'Write, rewrite and adjust the tone of your posts with AI, in your language.',
+            'mcp' => 'Run TryPost from Claude or ChatGPT',
+            'mcp_tooltip' => 'Connect Claude, ChatGPT or another AI. Ask it to create and schedule posts, fill your queue, organize ideas and show how you\'re growing.',
+            'repurpose' => 'Automatic video reposting',
+            'repurpose_tooltip' => 'Posted a video on Instagram? TryPost automatically reposts it to TikTok, YouTube, Facebook and your other networks.',
+            'analytics' => 'Advanced analytics',
+            'analytics_tooltip' => 'See all your networks together, like your total followers, or filter by network and by post. Views, reach, likes, comments and more, so you know what works.',
+            'team' => 'Unlimited team members',
             'team_tooltip' => 'Invite as many people as you want to your team, at no extra cost. Set what each person can do and approve posts before they go out.',
         ],
     ],
 
     'current_plan' => [
+        'statuses' => [
+            'active' => 'Active',
+            'trial' => 'Free trial',
+            'cancelling' => 'Cancelled',
+            'past_due' => 'Past due',
+        ],
         'change' => 'Change plan',
-        'price_monthly' => ':price/month',
-        'price_yearly' => ':price/year',
+        'subscribe' => 'Subscribe now',
         'trial_until' => 'Trial until :date',
-        'renews' => 'Renews automatically',
         'cancelled' => 'Cancelled, ends on :date',
-        'workspaces_usage' => 'Workspaces: :count of :limit',
+        'discount_until' => ':discount off until :date',
+        'discount_forever' => ':discount off on every payment',
+        'discount_once' => ':discount off your next payment',
     ],
 
     'subscription' => [
-        'title' => 'Payment method',
+        'title' => 'Payment methods',
+        'default' => 'Default',
         'description' => 'Update your card or billing details on Stripe.',
         'no_payment_method' => 'No payment method on file yet.',
         'expires_on' => 'Expires :month/:year',
         'manage_stripe' => 'Manage on Stripe',
     ],
 
+    'tabs' => [
+        'plan' => 'Plan',
+        'invoices' => 'Invoices',
+    ],
+
     'invoices' => [
-        'title' => 'Invoices',
-        'description' => 'Download your past invoices.',
+        'columns' => [
+            'date' => 'Date',
+            'amount' => 'Amount',
+            'status' => 'Status',
+        ],
+        'empty_title' => 'No invoices yet',
+        'empty_description' => 'Your invoices show up here after your first payment.',
         'paid' => 'Paid',
         'download' => 'Download invoice',
     ],

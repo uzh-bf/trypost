@@ -9,6 +9,7 @@ use App\Enums\Notification\Type as NotificationType;
 use App\Enums\User\DefaultPostAction;
 use App\Enums\User\Locale;
 use App\Enums\User\Persona;
+use App\Enums\User\PreviousSoftware;
 use App\Enums\User\ReferralSource;
 use App\Enums\User\Theme;
 use App\Enums\User\TimeFormat;
@@ -16,9 +17,12 @@ use App\Enums\User\WeekStart;
 use App\Models\Traits\HasAccount;
 use App\Models\Traits\HasMedia;
 use App\Models\Traits\HasWorkspace;
+use App\Models\Traits\SyncsStripeCustomer;
+use App\Support\Timezone;
 use Database\Factories\UserFactory;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Contracts\Translation\HasLocalePreference;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -33,7 +37,7 @@ use Laravel\Passport\HasApiTokens;
 class User extends Authenticatable implements HasLocalePreference, MustVerifyEmail, OAuthenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use HasAccount, HasApiTokens, HasFactory, HasMedia, HasUuids, HasWorkspace, RoutesNotifications;
+    use HasAccount, HasApiTokens, HasFactory, HasMedia, HasUuids, HasWorkspace, RoutesNotifications, SyncsStripeCustomer;
 
     /**
      * @var list<string>
@@ -61,6 +65,7 @@ class User extends Authenticatable implements HasLocalePreference, MustVerifyEma
         'registration_ip',
         'persona',
         'goals',
+        'previous_software',
         'referral_source',
         'locale',
         'timezone',
@@ -74,6 +79,7 @@ class User extends Authenticatable implements HasLocalePreference, MustVerifyEma
      * @var array<string, mixed>
      */
     protected $attributes = [
+        'timezone' => Timezone::DEFAULT,
         'theme' => Theme::DEFAULT->value,
         'time_format' => TimeFormat::DEFAULT->value,
         'week_starts_on' => WeekStart::DEFAULT->value,
@@ -131,6 +137,7 @@ class User extends Authenticatable implements HasLocalePreference, MustVerifyEma
             'two_factor_confirmed_at' => 'datetime',
             'persona' => Persona::class,
             'goals' => 'array',
+            'previous_software' => PreviousSoftware::class,
             'referral_source' => ReferralSource::class,
             'locale' => Locale::class,
             'theme' => Theme::class,
@@ -138,6 +145,17 @@ class User extends Authenticatable implements HasLocalePreference, MustVerifyEma
             'week_starts_on' => WeekStart::class,
             'default_post_action' => DefaultPostAction::class,
         ];
+    }
+
+    /**
+     * The stored zone read as its canonical identifier, so an alias the tz
+     * database renamed after it was saved never reaches Carbon.
+     */
+    protected function timezone(): Attribute
+    {
+        return Attribute::make(
+            get: fn (string $value): string => Timezone::usable($value),
+        );
     }
 
     public function preferredLocale(): string
@@ -172,5 +190,20 @@ class User extends Authenticatable implements HasLocalePreference, MustVerifyEma
     public function isConnectedTo(SocialAuthProvider $provider): bool
     {
         return (bool) $this->{"{$provider->value}_id"};
+    }
+
+    /**
+     * Whether unlinking this provider still leaves the user a way to sign in:
+     * a password or another connected provider.
+     */
+    public function canDisconnectFrom(SocialAuthProvider $provider): bool
+    {
+        if ($this->password) {
+            return true;
+        }
+
+        return collect(SocialAuthProvider::cases())
+            ->reject(fn (SocialAuthProvider $other): bool => $other === $provider)
+            ->contains(fn (SocialAuthProvider $other): bool => $this->isConnectedTo($other));
     }
 }

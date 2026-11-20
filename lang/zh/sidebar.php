@@ -7,6 +7,7 @@ return [
     'select_workspace' => '选择工作区',
     'create_workspace' => '创建工作区',
     'new' => '新建',
+    'unfinished_post' => '你有一篇未完成的帖子',
     'create' => '创建',
     'new_menu' => [
         'post' => '帖子',
@@ -48,6 +49,7 @@ return [
         'github' => 'GitHub',
         'status' => '应用状态',
         'chat' => '在线客服',
+        'changelog' => '新功能',
         'referral' => '赚取 30% 推荐奖励',
         'discord' => 'Discord 社区',
         'community' => '社区',

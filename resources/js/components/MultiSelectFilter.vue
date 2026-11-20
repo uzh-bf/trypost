@@ -13,6 +13,7 @@ import {
     PopoverTrigger,
 } from '@/components/ui/popover';
 import { useBelowBreakpoint } from '@/composables/useBreakpoint';
+import { filterBySearch } from '@/lib/search';
 
 interface FilterOption {
     id: string;
@@ -68,13 +69,11 @@ watch(open, (isOpen) => {
     }
 });
 
-const visibleOptions = computed(() => {
-    const query = search.value.trim().toLocaleLowerCase();
-
-    return props.options.filter((option) =>
-        (option.searchText ?? option.label).toLocaleLowerCase().includes(query),
-    );
-});
+const visibleOptions = computed(() =>
+    filterBySearch(props.options, search.value, (option) => [
+        option.searchText ?? option.label,
+    ]),
+);
 
 const toggle = (id: string): void => {
     selectedIds.value = selectedIds.value.includes(id)
@@ -107,7 +106,7 @@ const toggleAll = (): void => {
         <slot v-if="$slots.panel" name="panel" />
         <template v-else>
         <slot name="header" :sheet="asSheet" :close="close" />
-        <div class="relative">
+        <div class="relative mb-2">
             <IconSearch
                 class="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
             />
@@ -123,7 +122,7 @@ const toggleAll = (): void => {
 
         <div
             v-if="showHeader"
-            class="mt-2 flex items-center justify-between p-2 text-sm text-foreground"
+            class="flex items-center justify-between p-2 text-sm text-foreground"
         >
             <span>{{ label }}</span>
             <button

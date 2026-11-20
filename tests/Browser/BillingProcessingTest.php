@@ -6,9 +6,8 @@ use App\Models\Plan;
 use App\Models\User;
 use App\Models\Workspace;
 
-test('once the subscription and plan are ready the processing page sends the user to the schedule', function () {
-    config(['trypost.self_hosted' => false]);
-
+function billingProcessingSubscriber(): User
+{
     $user = User::factory()->create();
     $workspace = Workspace::factory()->create([
         'account_id' => $user->account_id,
@@ -19,20 +18,73 @@ test('once the subscription and plan are ready the processing page sends the use
     subscribeAccount($user->account);
     $user->account->update(['plan_id' => Plan::query()->value('id') ?? Plan::factory()->create()->id]);
 
-    $this->actingAs($user);
+    return $user;
+}
 
-    $schedulePath = parse_url(route('app.posts.index'), PHP_URL_PATH);
+test('once the subscription and plan are ready the processing page opens the schedule', function () {
+    config(['trypost.self_hosted' => false]);
+
+    $this->actingAs(billingProcessingSubscriber());
+
+    $schedulePath = route('app.posts.index', absolute: false);
 
     $page = visit(route('app.billing.processing'));
-    $page->script(<<<JS
-        (async () => {
-            for (let attempt = 0; attempt < 200; attempt++) {
-                if (window.location.pathname === '{$schedulePath}') return;
-                await new Promise((resolve) => setTimeout(resolve, 50));
-            }
-        })();
-    JS);
+    waitForPath($page, $schedulePath);
 
     $page->assertPathIs($schedulePath)
+        ->assertNoJavaScriptErrors();
+});
+
+test('a subscription started from billing returns to billing, not the onboarding', function () {
+    config(['trypost.self_hosted' => false]);
+
+    $user = billingProcessingSubscriber();
+    Plan::query()->whereKey($user->account->plan_id)->update(['stripe_monthly_price_id' => 'price_123']);
+    $this->actingAs($user->fresh());
+
+    $billingPath = route('app.billing.index', absolute: false);
+
+    $page = visit(route('app.billing.processing', ['from' => 'billing']));
+    waitForPath($page, $billingPath);
+
+    $page->assertPathIs($billingPath)
+        ->assertNoJavaScriptErrors();
+});
+
+test('on a phone the processing page opens the schedule too', function () {
+    config(['trypost.self_hosted' => false]);
+
+    $this->actingAs(billingProcessingSubscriber());
+
+    $schedulePath = route('app.posts.index', absolute: false);
+
+    $page = visit(route('app.billing.processing'))->on()->mobile();
+    waitForPath($page, $schedulePath);
+
+    $page->assertPathIs($schedulePath)
+        ->assertNoJavaScriptErrors();
+});
+
+test('while checkout settles the processing page uses the neutral auth layout, not the welcome one', function () {
+    config(['trypost.self_hosted' => false]);
+
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->create([
+        'account_id' => $user->account_id,
+        'user_id' => $user->id,
+    ]);
+    $workspace->members()->attach($user->id, membershipPivot('admin'));
+    $user->update(['current_workspace_id' => $workspace->id]);
+
+    $this->actingAs($user);
+
+    $page = visit(route('app.billing.processing'));
+    waitFor($page, '@billing-processing');
+
+    $page->assertSee('Processing your subscription')
+        ->assertVisible('@billing-processing')
+        ->assertVisible('@auth-logo')
+        ->assertMissing('@welcome-back')
+        ->assertMissing('@welcome-step-plan')
         ->assertNoJavaScriptErrors();
 });

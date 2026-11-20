@@ -18,61 +18,6 @@ use Illuminate\Support\Facades\Queue;
 use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Laravel\Ai\Prompts\AgentPrompt;
 
-function waitForComposerTemplatesTestId(mixed $page, string $testId): void
-{
-    $page->script(<<<JS
-        (async () => {
-            for (let attempt = 0; attempt < 200; attempt++) {
-                if (document.querySelector('[data-testid="{$testId}"]')?.getBoundingClientRect().height > 0) return;
-                await new Promise((resolve) => setTimeout(resolve, 50));
-            }
-        })();
-    JS);
-}
-
-function waitForComposerTemplatesCondition(mixed $page, string $condition): void
-{
-    $page->script(<<<JS
-        (async () => {
-            for (let attempt = 0; attempt < 200; attempt++) {
-                if ({$condition}) return;
-                await new Promise((resolve) => setTimeout(resolve, 50));
-            }
-        })();
-    JS);
-}
-
-/**
- * Dialogs animate in; a click that lands before the animation settles is swallowed.
- */
-function waitForComposerTemplatesDialog(mixed $page, string $testId): void
-{
-    $page->script(<<<JS
-        (async () => {
-            for (let attempt = 0; attempt < 200; attempt++) {
-                const dialog = document.querySelector('[data-testid="{$testId}"]');
-                if (dialog?.getAttribute('data-state') === 'open'
-                    && dialog.getAnimations().every((animation) => animation.playState !== 'running')) return;
-                await new Promise((resolve) => setTimeout(resolve, 50));
-            }
-        })();
-    JS);
-}
-
-function waitForComposerTemplatesDatabase(mixed $page, Closure $condition): void
-{
-    for ($attempt = 0; $attempt < 50 && ! $condition(); $attempt++) {
-        $page->script('new Promise((resolve) => setTimeout(resolve, 100))');
-    }
-}
-
-function composerTemplatesListHas(string $text): string
-{
-    $expected = json_encode($text);
-
-    return "(document.querySelector('[data-testid=\"composer-templates-list\"]')?.textContent ?? '').includes({$expected})";
-}
-
 /**
  * @return array{0: User, 1: Workspace}
  */
@@ -95,15 +40,15 @@ function openComposerTemplates(User $user, string $content = ''): mixed
     test()->actingAs($user);
 
     $page = visit(route('app.posts.create'));
-    waitForComposerTemplatesDialog($page, 'post-composer-dialog');
-    waitForComposerTemplatesTestId($page, 'composer-base-content');
+    waitForOpen($page, '@post-composer-dialog');
+    waitFor($page, '@composer-base-content');
 
     if ($content !== '') {
         $page->fill('@composer-base-content', $content);
     }
 
     $page->click('@composer-templates-toggle');
-    waitForComposerTemplatesTestId($page, 'composer-template-quick_win');
+    waitFor($page, '@composer-template-quick_win');
 
     return $page;
 }
@@ -142,24 +87,24 @@ test('in the per-network view a template goes to the expanded account override o
     $this->actingAs($user);
 
     $page = visit(route('app.posts.create'));
-    waitForComposerTemplatesDialog($page, 'post-composer-dialog');
-    waitForComposerTemplatesTestId($page, 'composer-add-account');
+    waitForOpen($page, '@post-composer-dialog');
+    waitFor($page, '@composer-add-account');
     $page->fill('@composer-base-content', 'Hello world')
         ->click('@composer-add-account')
         ->click("@composer-account-option-{$linkedIn->id}")
         ->click("@composer-account-option-{$x->id}")
         ->click('@composer-next');
-    waitForComposerTemplatesTestId($page, 'composer-customization');
+    waitFor($page, '@composer-customization');
     $page->click("@composer-account-{$linkedIn->id}");
-    waitForComposerTemplatesTestId($page, "composer-caption-{$linkedIn->id}");
+    waitFor($page, "@composer-caption-{$linkedIn->id}");
     $page->click('@composer-templates-toggle')
         ->click('@composer-templates-tab-team');
-    waitForComposerTemplatesTestId($page, "composer-template-{$template->id}");
+    waitFor($page, "@composer-template-{$template->id}");
     $page->click("@composer-template-{$template->id}");
 
     $page->assertValue("@composer-caption-{$linkedIn->id}", "Hello world\n\nTeam body")
         ->click("@composer-account-{$x->id}");
-    waitForComposerTemplatesTestId($page, "composer-caption-{$x->id}");
+    waitFor($page, "@composer-caption-{$x->id}");
 
     $page->assertValue("@composer-caption-{$x->id}", 'Hello world')
         ->assertNoJavaScriptErrors();
@@ -175,13 +120,13 @@ test('the personal tab lists only the actor templates with their badge and searc
 
     $page = openComposerTemplates($user);
     $page->click('@composer-templates-tab-personal');
-    waitForComposerTemplatesTestId($page, "composer-template-{$mine->id}");
+    waitFor($page, "@composer-template-{$mine->id}");
 
     $page->assertVisible("@composer-template-{$other->id}")
         ->assertMissing("@composer-template-{$theirs->id}")
         ->assertSeeIn("@composer-template-visibility-{$mine->id}", __('create.templates.visibility.personal'))
         ->fill('@composer-templates-search', 'Monday');
-    waitForComposerTemplatesCondition($page, "!document.querySelector('[data-testid=\"composer-template-{$other->id}\"]')");
+    waitForGone($page, "@composer-template-{$other->id}");
 
     $page->assertVisible("@composer-template-{$mine->id}")
         ->assertMissing("@composer-template-{$other->id}")
@@ -218,14 +163,14 @@ test('the new template button creates a team template without touching the draft
     $page = openComposerTemplates($user, 'Hello');
     $page->click('@composer-templates-tab-team')
         ->click('@composer-templates-new');
-    waitForComposerTemplatesDialog($page, 'template-editor');
+    waitForOpen($page, '@template-editor');
 
     $page->assertValue('@template-editor-body', '')
         ->assertSeeIn('@template-editor-visibility', __('create.templates.visibility.team'))
         ->fill('@template-editor-title', 'Launch checklist')
         ->fill('@template-editor-body', "• Date\n• Owner")
         ->click('@template-editor-save');
-    waitForComposerTemplatesCondition($page, composerTemplatesListHas('Launch checklist'));
+    waitForText($page, '@composer-templates-list', 'Launch checklist');
 
     $template = PostTemplate::query()->where('workspace_id', $workspace->id)->sole();
 
@@ -249,31 +194,31 @@ test('edit, duplicate and delete from the panel never touch the draft', function
 
     $page = openComposerTemplates($user, 'Hello');
     $page->click('@composer-templates-tab-personal');
-    waitForComposerTemplatesTestId($page, "composer-template-{$template->id}");
+    waitFor($page, "@composer-template-{$template->id}");
 
     $page->click("@composer-template-menu-{$template->id}");
-    waitForComposerTemplatesTestId($page, "template-edit-{$template->id}");
+    waitFor($page, "@template-edit-{$template->id}");
     $page->click("@template-edit-{$template->id}");
-    waitForComposerTemplatesDialog($page, 'template-editor');
+    waitForOpen($page, '@template-editor');
     $page->assertValue('@template-editor-title', 'Old title')
         ->fill('@template-editor-title', 'New title')
         ->click('@template-editor-save');
-    waitForComposerTemplatesCondition($page, composerTemplatesListHas('New title'));
+    waitForText($page, '@composer-templates-list', 'New title');
 
     expect($template->fresh()->title)->toBe('New title');
     $page->assertMissing('@template-editor')
         ->assertValue('@composer-base-content', 'Hello');
 
     $page->click("@composer-template-menu-{$template->id}");
-    waitForComposerTemplatesTestId($page, "template-duplicate-{$template->id}");
+    waitFor($page, "@template-duplicate-{$template->id}");
     $page->click("@template-duplicate-{$template->id}");
-    waitForComposerTemplatesDialog($page, 'template-duplicate-dialog');
+    waitForOpen($page, '@template-duplicate-dialog');
     $page->assertSeeIn('@template-duplicate-dialog', 'New title')
         ->click('@template-duplicate-visibility');
-    waitForComposerTemplatesTestId($page, 'template-duplicate-visibility-team');
+    waitFor($page, '@template-duplicate-visibility-team');
     $page->click('@template-duplicate-visibility-team')
         ->click('@template-duplicate-confirm');
-    waitForComposerTemplatesCondition($page, composerTemplatesListHas('New title (copy)'));
+    waitForText($page, '@composer-templates-list', 'New title (copy)');
 
     $copy = PostTemplate::query()->where('workspace_id', $workspace->id)->whereKeyNot($template->id)->sole();
 
@@ -284,13 +229,13 @@ test('edit, duplicate and delete from the panel never touch the draft', function
         ->assertValue('@composer-base-content', 'Hello');
 
     $page->click("@composer-template-menu-{$copy->id}");
-    waitForComposerTemplatesTestId($page, "template-delete-{$copy->id}");
+    waitFor($page, "@template-delete-{$copy->id}");
     $page->click("@template-delete-{$copy->id}");
-    waitForComposerTemplatesDialog($page, 'confirm-delete-modal');
+    waitForOpen($page, '@confirm-delete-modal');
     $page->assertMissing('@confirm-delete-input')
         ->click('@template-delete-confirm');
-    waitForComposerTemplatesDatabase($page, fn () => PostTemplate::query()->whereKey($copy->id)->doesntExist());
-    waitForComposerTemplatesCondition($page, "!document.querySelector('[data-testid=\"composer-template-{$copy->id}\"]')");
+    waitForDatabase($page, fn () => PostTemplate::query()->whereKey($copy->id)->doesntExist());
+    waitForGone($page, "@composer-template-{$copy->id}");
 
     expect(PostTemplate::query()->whereKey($copy->id)->exists())->toBeFalse()
         ->and(PostTemplate::query()->whereKey($template->id)->exists())->toBeTrue();
@@ -305,8 +250,8 @@ test('at 390px the header fits and every side panel toggle works', function () {
     $this->actingAs($user);
 
     $page = visit(route('app.posts.create'))->resize(390, 844);
-    waitForComposerTemplatesDialog($page, 'post-composer-dialog');
-    waitForComposerTemplatesTestId($page, 'composer-templates-toggle');
+    waitForOpen($page, '@post-composer-dialog');
+    waitFor($page, '@composer-templates-toggle');
 
     $overflow = $page->script(<<<'JS'
         (() => {
@@ -322,17 +267,17 @@ test('at 390px the header fits and every side panel toggle works', function () {
     expect($overflow)->toBeFalse();
 
     $page->click('@composer-templates-toggle');
-    waitForComposerTemplatesDialog($page, 'composer-templates-sheet');
+    waitForOpen($page, '@composer-templates-sheet');
     $page->assertVisible('@composer-templates-panel')
         ->click('@composer-templates-sheet-close');
-    waitForComposerTemplatesCondition($page, "!document.querySelector('[data-testid=\"composer-templates-sheet\"]')");
+    waitForGone($page, '@composer-templates-sheet');
     $page->click('@composer-ai-assistant');
-    waitForComposerTemplatesDialog($page, 'composer-assistant-sheet');
+    waitForOpen($page, '@composer-assistant-sheet');
     $page->assertVisible('@composer-assistant-panel')
         ->click('@composer-assistant-sheet-close');
-    waitForComposerTemplatesCondition($page, "!document.querySelector('[data-testid=\"composer-assistant-sheet\"]')");
+    waitForGone($page, '@composer-assistant-sheet');
     $page->click('@composer-view-preview');
-    waitForComposerTemplatesTestId($page, 'composer-previews-scroll');
+    waitFor($page, '@composer-previews-scroll');
 
     $page->assertVisible('@composer-previews-scroll')
         ->assertAttribute('@composer-view-preview', 'aria-pressed', 'true')
@@ -344,8 +289,8 @@ test('a failed template load shows an inline error and retry recovers', function
     $this->actingAs($user);
 
     $page = visit(route('app.posts.create'));
-    waitForComposerTemplatesDialog($page, 'post-composer-dialog');
-    waitForComposerTemplatesTestId($page, 'composer-templates-toggle');
+    waitForOpen($page, '@post-composer-dialog');
+    waitFor($page, '@composer-templates-toggle');
     $page->script(<<<'JS'
         (() => {
             const open = XMLHttpRequest.prototype.open;
@@ -357,12 +302,12 @@ test('a failed template load shows an inline error and retry recovers', function
         })()
     JS);
     $page->click('@composer-templates-toggle');
-    waitForComposerTemplatesTestId($page, 'composer-templates-error');
+    waitFor($page, '@composer-templates-error');
 
     $page->assertVisible('@composer-templates-retry');
     $page->script('window.__restoreXhr()');
     $page->click('@composer-templates-retry');
-    waitForComposerTemplatesTestId($page, 'composer-template-quick_win');
+    waitFor($page, '@composer-template-quick_win');
 
     $page->assertMissing('@composer-templates-error')->assertNoJavaScriptErrors();
 });
@@ -399,11 +344,11 @@ test('AI model and style choices follow caption actions and failures preserve th
     });
     $this->actingAs($user);
     $page = visit(route('app.posts.create'))->resize($width, $height);
-    waitForComposerTemplatesDialog($page, 'post-composer-dialog');
+    waitForOpen($page, '@post-composer-dialog');
     $page->click('@composer-add-account')->click("@composer-account-option-{$account->id}")
         ->click('@composer-add-account');
     $page->fill("@composer-caption-{$account->id}", 'Original draft.')->click('@composer-ai-assistant');
-    waitForComposerTemplatesTestId($page, 'writing-assistant-model');
+    waitFor($page, '@writing-assistant-model');
     $page->assertAttribute('@writing-assistant-model', 'data-state', 'closed')
         ->screenshot(false, "ai-styles-caption-default-{$suffix}")
         ->click('@writing-assistant-style')
@@ -427,23 +372,23 @@ test('AI model and style choices follow caption actions and failures preserve th
     $page->click('@writing-assistant-generate')->assertDisabled('@writing-assistant-model')->assertDisabled('@writing-assistant-style')
         ->assertDisabled('@writing-assistant-generate')
         ->screenshot(false, "ai-styles-caption-busy-{$suffix}");
-    waitForComposerTemplatesTestId($page, 'writing-assistant-insert');
+    waitFor($page, '@writing-assistant-insert');
     $page->screenshot(false, "ai-styles-caption-result-{$suffix}")
         ->click('@writing-assistant-model')->click('@writing-assistant-model-sol')
         ->click('@writing-assistant-regenerate');
-    waitForComposerTemplatesCondition($page, "!document.querySelector('[data-testid=\"writing-assistant-regenerate\"]')?.disabled");
+    waitForState($page, '@writing-assistant-regenerate', '!element.disabled');
     $page->click('@writing-assistant-insert');
     $page->assertValue("@composer-caption-{$account->id}", "Original draft.\n\nA regenerated suggestion.");
     $page->click('@composer-ai-assistant');
-    waitForComposerTemplatesTestId($page, 'writing-assistant-mode-rephrase');
+    waitFor($page, '@writing-assistant-mode-rephrase');
     $page->click('@writing-assistant-style')->click('@writing-assistant-style-df')
         ->click('@writing-assistant-mode-rephrase');
-    waitForComposerTemplatesTestId($page, 'writing-assistant-error');
+    waitFor($page, '@writing-assistant-error');
     $page->assertValue("@composer-caption-{$account->id}", "Original draft.\n\nA regenerated suggestion.")
         ->screenshot(false, "ai-styles-caption-error-{$suffix}");
     $page->click('@writing-assistant-style')->click('@writing-assistant-style-default')
         ->click('@writing-assistant-mode-rephrase');
-    waitForComposerTemplatesTestId($page, 'writing-assistant-replace');
+    waitFor($page, '@writing-assistant-replace');
     $page->click('@writing-assistant-replace');
     if ($width < 1024) {
         $page->click('@composer-assistant-sheet-close');
@@ -454,14 +399,14 @@ test('AI model and style choices follow caption actions and failures preserve th
     PostWritingAssistant::assertPrompted(fn (AgentPrompt $prompt): bool => $prompt->model === 'test-sol' && $prompt->agent->mode->value === 'regenerate' && $prompt->agent->writingStyleInstructions === $guide);
     PostWritingAssistant::assertPrompted(fn (AgentPrompt $prompt): bool => $prompt->model === 'test-sol' && $prompt->agent->mode->value === 'rephrase' && $prompt->agent->writingStyleInstructions === null);
     $page->click('@composer-save-draft');
-    waitForComposerTemplatesDatabase($page, fn (): bool => Post::where('user_id', $user->id)->exists());
+    waitForDatabase($page, fn (): bool => Post::where('user_id', $user->id)->exists());
     $post = Post::where('user_id', $user->id)->sole();
     expect(strip_tags($post->content))->toBe('A replacement suggestion.');
     $reopened = visit(route('app.posts.edit', $post))->resize($width, $height);
-    waitForComposerTemplatesTestId($reopened, "composer-caption-{$account->id}");
+    waitFor($reopened, "@composer-caption-{$account->id}");
     $reopened->assertValue("@composer-caption-{$account->id}", 'A replacement suggestion.')->screenshot(false, "ai-styles-caption-saved-{$suffix}")->assertNoJavaScriptErrors();
     $reopened->click('@composer-ai-assistant')->click('@writing-assistant-mode-rephrase');
-    waitForComposerTemplatesTestId($reopened, 'writing-assistant-replace');
+    waitFor($reopened, '@writing-assistant-replace');
     PostWritingAssistant::assertPrompted(fn (AgentPrompt $prompt): bool => $prompt->agent->currentContent === 'A replacement suggestion.' && $prompt->agent->writingStyleInstructions === null);
     Http::assertNotSent(fn ($request): bool => str_contains($request->url(), 'gateway.example.test') || str_contains($request->url(), 'openrouter.ai'));
 })->with([
@@ -479,15 +424,15 @@ test('an unavailable AI default stays visible and a legacy single model needs no
     $user->update(['name' => 'Demo Reviewer', 'email' => 'reviewer@example.test', 'locale' => Locale::German]);
     $this->actingAs($user);
     $page = visit(route('app.posts.create'))->resize(1280, 900);
-    waitForComposerTemplatesDialog($page, 'post-composer-dialog');
+    waitForOpen($page, '@post-composer-dialog');
     $page->click('@composer-ai-assistant')->click('@writing-assistant-mode-generate')
         ->fill('@writing-assistant-prompt', 'Write a short synthetic announcement for our demo channel.')
         ->click('@writing-assistant-generate');
-    waitForComposerTemplatesTestId($page, 'writing-assistant-error');
+    waitFor($page, '@writing-assistant-error');
     $page->screenshot(false, 'ai-models-caption-unavailable-de')->assertNoJavaScriptErrors();
     config(['ai_models.default' => null, 'ai.default' => 'openai']);
     $legacy = visit(route('app.posts.create'));
-    waitForComposerTemplatesDialog($legacy, 'post-composer-dialog');
+    waitForOpen($legacy, '@post-composer-dialog');
     $legacy->click('@composer-ai-assistant')->assertMissing('@writing-assistant-model')->assertMissing('@writing-assistant-style');
     Http::assertNotSent(fn ($request): bool => str_contains($request->url(), 'gateway.example.test') || str_contains($request->url(), 'openrouter.ai'));
 });

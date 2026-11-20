@@ -15,6 +15,7 @@ return [
     'steps' => [
         'persona' => 'Su di te',
         'goals' => 'I tuoi obiettivi',
+        'software' => 'Strumento attuale',
         'plan' => 'Piano',
     ],
     'personas' => [
@@ -39,6 +40,14 @@ return [
         'manage_clients' => 'Gestire brand o clienti',
         'other' => 'Qualcos\'altro',
     ],
-    'plan_title' => 'Scegli il tuo piano',
-    'plan_description' => 'I due piani hanno le stesse funzionalità. Cambia solo il numero di workspace, e puoi cambiare piano quando vuoi.',
+    'software_title' => 'Quale strumento usi oggi?',
+    'software' => [
+        'none' => 'Non ne uso ancora nessuno',
+        'other' => 'Altro',
+    ],
+    'plan_title' => 'Attiva il tuo account',
+    'plan_description' => 'Collega i tuoi canali e programma il tuo primo post oggi.',
+    'plan_terms' => 'Poi :price/mese. Disdici quando vuoi',
+    'plan_checkout_button' => 'Attiva il mio account',
+    'plan_cancel_anytime' => 'Disdici quando vuoi',
 ];

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 return [
     'title' => 'Settings',
     'description' => 'Manage your profile and account settings',
@@ -9,13 +11,11 @@ return [
         'groups' => [
             'personal' => 'Personal',
             'workspace' => 'Workspace',
-            'features' => 'Features',
-            'developers' => 'Developers',
-            'account' => 'Account',
+            'content' => 'Content',
+            'integrations' => 'Integrations',
         ],
         'items' => [
             'profile' => 'Profile',
-            'authentication' => 'Authentication',
             'notifications' => 'Notifications',
             'preferences' => 'Preferences',
             'general' => 'General',
@@ -24,7 +24,7 @@ return [
             'signatures' => 'Signatures',
             'labels' => 'Labels',
             'webhooks' => 'Webhooks',
-            'api_keys' => 'API Keys',
+            'api_keys' => 'API',
             'mcp' => 'MCP',
             'billing' => 'Billing',
         ],
@@ -41,7 +41,7 @@ return [
         'account_disconnected' => 'Account disconnected',
         'account_disconnected_description' => 'Receive an email when a social account is disconnected',
         'post_note_added' => 'New note on a post',
-        'post_note_added_description' => 'Receive an email when a team member adds a note to a post',
+        'post_note_added_description' => 'Receive an email when a teammate mentions you in a note, or adds one to a post you created or commented on',
         'collaboration' => 'Collaboration',
         'collaboration_description' => 'Get emails about approval requests and approved or rejected posts',
         'save_failed' => 'Could not save your notification preferences. Please try again.',
@@ -100,27 +100,23 @@ return [
         'resend_verification' => 'Click here to resend the verification email.',
         'verification_sent' => 'A new verification link has been sent to your email address.',
         'save' => 'Save',
-    ],
-
-    'authentication' => [
-        'title' => 'Authentication',
-        'page_title' => 'Authentication settings',
+        'tabs' => [
+            'profile' => 'Profile',
+            'login' => 'Password & login',
+            'sessions' => 'Sessions',
+        ],
         'sessions' => [
             'title' => 'Active sessions',
             'description' => 'If you notice anything suspicious, sign out of other devices.',
             'unknown_browser' => 'Unknown browser',
-            'unknown_ip' => 'Unknown IP',
             'on' => 'on',
             'active_now' => 'Active now',
+            'last_activity' => 'Last activity :time',
             'log_out_others' => 'Log out other devices',
             'modal_title' => 'Log out other devices',
-            'modal_description_password' => 'Enter your current password to confirm you want to log out other browser sessions.',
-            'modal_description_email' => 'Type your email address to confirm you want to log out other browser sessions.',
-            'password_placeholder' => 'Current password',
-            'email_placeholder' => 'Your account email',
+            'modal_description' => 'Every other device signed in to your account will be signed out. This session stays active.',
             'cancel' => 'Cancel',
             'submit' => 'Log out other devices',
-            'email_mismatch' => 'The email address does not match your account.',
             'flash_logged_out' => 'You have been logged out from other devices.',
         ],
         'password' => [

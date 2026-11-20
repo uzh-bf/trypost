@@ -3,11 +3,11 @@ import { IconVolumeOff } from '@tabler/icons-vue';
 import { computed } from 'vue';
 
 import PostMediaPreview from '@/components/posts/previews/PostMediaPreview.vue';
+import type { PreviewMediaLayout } from '@/components/posts/previews/types';
 import VideoPreview from '@/components/posts/previews/VideoPreview.vue';
 import { isDocument, isVideo } from '@/lib/mediaType';
 import type { MediaItem } from '@/types/media';
 
-import type { PreviewMediaLayout } from './types';
 
 const props = withDefaults(
     defineProps<{
@@ -88,7 +88,7 @@ const frameClass = computed((): string =>
                     v-if="isDocument(first)"
                     :src="`${first.url}#toolbar=0&navpanes=0&view=FitH`"
                     :title="first.original_filename || 'PDF'"
-                    class="size-full border-0"
+                    class="absolute -top-2 -left-2 h-[calc(100%+1rem)] w-[calc(100%+1rem)] max-w-none border-0"
                     loading="lazy"
                 />
                 <PostMediaPreview
@@ -97,29 +97,6 @@ const frameClass = computed((): string =>
                     :show-arrows="media.length > 1"
                     media-class="size-full object-cover bg-black"
                 />
-            </div>
-        </div>
-        <div v-else-if="mode === 'stack'" class="space-y-0.5">
-            <div
-                v-for="item in media"
-                :key="item.id"
-                class="relative overflow-hidden bg-muted"
-                :class="frameClass"
-                :style="{ paddingBottom: `${ratioOf(item) * 100}%` }"
-            >
-                <div class="absolute inset-0">
-                    <VideoPreview
-                        v-if="isVideo(item)"
-                        :src="item.url"
-                        video-class="size-full object-cover bg-black"
-                    />
-                    <img
-                        v-else
-                        :src="item.url"
-                        :alt="item.original_filename"
-                        class="size-full object-cover"
-                    />
-                </div>
             </div>
         </div>
         <div
@@ -137,7 +114,7 @@ const frameClass = computed((): string =>
             >
                 <VideoPreview
                     v-if="isVideo(tile.item)"
-                    :src="tile.item.url"
+                    :media="tile.item"
                     video-class="size-full object-cover bg-black"
                 />
                 <img
@@ -163,7 +140,7 @@ const frameClass = computed((): string =>
             >
                 <VideoPreview
                     v-if="isVideo(item)"
-                    :src="item.url"
+                    :media="item"
                     video-class="size-full object-cover bg-black"
                 />
                 <img
@@ -182,14 +159,16 @@ const frameClass = computed((): string =>
             <div
                 v-for="(item, index) in media.slice(0, 4)"
                 :key="item.id"
-                class="relative aspect-square overflow-hidden"
-                :class="{
-                    'row-span-2 aspect-auto': media.length === 3 && index === 0,
-                }"
+                class="relative overflow-hidden"
+                :class="
+                    media.length === 3 && index === 0
+                        ? 'row-span-2'
+                        : 'aspect-square'
+                "
             >
                 <VideoPreview
                     v-if="isVideo(item)"
-                    :src="item.url"
+                    :media="item"
                     video-class="size-full object-cover bg-black"
                 />
                 <img

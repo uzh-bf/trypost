@@ -7,6 +7,8 @@ return [
     'description' => 'Zarządzaj kanałami tego workspace\'u.',
     'connect' => 'Połącz kanał',
     'settings' => 'Ustawienia kanału',
+    'manage' => 'Zarządzaj kanałami',
+    'set_goal' => 'Ustaw cel publikacji',
     'publish' => 'Publikuj',
     'insights' => 'Insights',
     'new_post' => 'Nowy post w tym kanale',
@@ -16,14 +18,13 @@ return [
     'connection_lost_hint' => 'Połącz ten kanał ponownie, aby dalej publikować.',
     'reconnect' => 'Połącz ponownie',
     'refresh_connection' => 'Odśwież połączenie',
+    'link_facebook_page' => 'Połącz ze stroną na Facebooku',
     'view_profile' => 'Zobacz profil',
     'disconnect' => 'Rozłącz',
     'actions' => 'Akcje kanału',
 
     'reorder' => [
         'handle' => 'Przeciągnij, aby zmienić kolejność: :name',
-        'move_up' => 'Przenieś w górę',
-        'move_down' => 'Przenieś w dół',
         'failed' => 'Nie udało się zmienić kolejności kanałów. Spróbuj ponownie.',
         'stale' => 'Twoje kanały zmieniły się od załadowania strony. Odśwież i spróbuj ponownie.',
     ],
@@ -169,6 +170,25 @@ return [
         'description' => 'Spowoduje to usunięcie wszystkich postów tego kanału w TryPost, w tym wersji roboczych, zaplanowanych postów i historii publikacji. Posty, które są już w sieci, pozostaną tam.',
         'keyword' => 'odłącz',
         'cancel' => 'Anuluj',
+    ],
+
+    'list' => [
+        'search' => 'Szukaj po nazwie, @nazwie użytkownika lub sieci',
+        'networks' => 'Sieci',
+        'networks_search' => 'Szukaj sieci',
+        'no_networks' => 'Nie znaleziono sieci',
+        'columns' => [
+            'channel' => 'Kanał',
+            'timezone' => 'Strefa czasowa',
+            'posting_times' => 'Godziny',
+            'this_week' => 'Ten tydzień',
+        ],
+        'posting_times_per_week' => ':count na tydzień',
+        'no_posting_times' => 'Brak godzin',
+        'no_results' => 'Żaden kanał nie pasuje do wyszukiwania.',
+        'connection_lost' => 'Ten kanał utracił połączenie',
+        'settings' => 'Ustawienia',
+        'more_actions' => 'Więcej działań',
     ],
 
     'settings_page' => [

@@ -4,81 +4,78 @@ declare(strict_types=1);
 
 namespace App\Actions\Billing;
 
+use App\Enums\Billing\CheckoutOrigin;
+use App\Enums\Billing\Interval;
+use App\Enums\Plan\Slug;
+use App\Enums\PostHog\CheckoutEvent;
+use App\Jobs\PostHog\CaptureAccountEvent;
 use App\Models\Account;
+use App\Models\Offer;
 use App\Models\Plan;
+use App\Services\PostHogService;
 use App\Support\Billing\ConfigureSubscriptionCheckout;
-use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Symfony\Component\HttpFoundation\Response;
 
 class StartSubscriptionCheckout
 {
-    /**
-     * Stripe metadata values are capped at 500 characters and rejected if longer:
-     * https://docs.stripe.com/api/metadata
-     */
-    private const STRIPE_METADATA_MAX_LENGTH = 500;
-
-    public function redirect(Account $account, string $priceId, string $cancelUrl, ?Plan $plan = null): Response
+    public function redirect(Account $account, string $priceId, string $cancelUrl, ?Plan $plan = null, ?Offer $offer = null, CheckoutOrigin $origin = CheckoutOrigin::Welcome): Response
     {
         // A leftover Workspaces row (unpaid/canceled without `deleted`) would
         // let Processing treat auth.plan as checkout-complete and skip the wait.
-        if ($account->plan_id !== null) {
+        if (filled($account->plan_id) && ! $account->onGenericTrial()) {
             $account->update(['plan_id' => null]);
         }
 
-        $account->createOrGetStripeCustomer([
-            'email' => $account->stripeEmail(),
-            'name' => $account->stripeName(),
-        ]);
+        $account->syncOrCreateStripeCustomer();
 
-        $monthlyPlan = $this->monthlyPlan($plan, $priceId);
         $subscription = $account->newSubscription(Account::SUBSCRIPTION_NAME, $priceId);
 
-        ConfigureSubscriptionCheckout::apply($subscription, $account, $monthlyPlan);
-        $subscription->withMetadata($this->subscriptionMetadata($account, $subscription->couponId));
+        $offer = $this->qualifiesForOffer($plan, $priceId) ? $offer : null;
+
+        $offerMetadata = array_filter([
+            ConfigureSubscriptionCheckout::OFFER_METADATA_KEY => $offer?->id,
+            ConfigureSubscriptionCheckout::OFFER_SLUG_METADATA_KEY => $offer?->slug,
+        ], filled(...));
+
+        ConfigureSubscriptionCheckout::apply($subscription, $offer);
+
+        $subscription->withMetadata($offerMetadata);
+
+        $interval = filled($plan) ? Interval::forPrice($plan, $priceId) : Interval::Monthly;
 
         $session = $subscription->checkout([
-            'success_url' => route('app.billing.processing').'?session_id={CHECKOUT_SESSION_ID}',
+            'success_url' => route('app.billing.processing', ['from' => $origin->value]).'&session_id={CHECKOUT_SESSION_ID}',
             'cancel_url' => $cancelUrl,
+            'metadata' => array_filter([
+                ConfigureSubscriptionCheckout::PLAN_METADATA_KEY => $plan?->slug->value,
+                ConfigureSubscriptionCheckout::INTERVAL_METADATA_KEY => $interval->value,
+                ConfigureSubscriptionCheckout::OFFER_SLUG_METADATA_KEY => $offer?->slug,
+            ], filled(...)),
         ]);
+
+        rescue(function () use ($account, $plan, $interval, $offer): void {
+            CaptureAccountEvent::dispatchIf(
+                PostHogService::isEnabled() && filled($account->owner_id),
+                (string) $account->owner_id,
+                (string) $account->id,
+                CheckoutEvent::Started,
+                [
+                    'plan_name' => $plan?->name,
+                    'interval' => $interval->value,
+                    'offer' => $offer?->slug,
+                ],
+            );
+        });
 
         return Inertia::location($session->url);
     }
 
     /**
-     * @return array<string, string>
+     * Offers are written for Socials monthly, so no other price gets one.
      */
-    private function subscriptionMetadata(Account $account, ?string $firstMonthCouponId): array
+    private function qualifiesForOffer(?Plan $plan, string $priceId): bool
     {
-        $owner = $account->owner;
-
-        $metadata = array_filter([
-            'utm_source' => $owner?->utm_source,
-            'utm_medium' => $owner?->utm_medium,
-            'utm_campaign' => $owner?->utm_campaign,
-            'utm_term' => $owner?->utm_term,
-            'utm_content' => $owner?->utm_content,
-            'gclid' => $owner?->gclid,
-            'fbclid' => $owner?->fbclid,
-            'li_fat_id' => $owner?->li_fat_id,
-            'ttclid' => $owner?->ttclid,
-            'rdt_cid' => $owner?->rdt_cid,
-            'epik' => $owner?->epik,
-            'persona' => $owner?->persona?->value,
-            'goals' => implode(',', $owner?->goals ?? []),
-            'referral_source' => $owner?->referral_source?->value,
-            ConfigureSubscriptionCheckout::FIRST_MONTH_COUPON_METADATA_KEY => $firstMonthCouponId,
-        ], filled(...));
-
-        return array_map(
-            fn (string $value): string => Str::limit($value, self::STRIPE_METADATA_MAX_LENGTH, ''),
-            $metadata,
-        );
-    }
-
-    private function monthlyPlan(?Plan $plan, string $priceId): ?Plan
-    {
-        return $plan?->stripe_monthly_price_id === $priceId ? $plan : null;
+        return $plan?->slug === Slug::Socials && $plan->stripe_monthly_price_id === $priceId;
     }
 }

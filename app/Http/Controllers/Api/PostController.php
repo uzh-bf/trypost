@@ -152,6 +152,8 @@ class PostController extends Controller
     {
         $file = $request->file('media');
 
+        AppendPostMedia::ensureAcceptsMedia($post);
+
         if ($violation = PostMediaRequestRules::typeViolation($post, MediaType::fromMime((string) $file->getMimeType()))) {
             throw ValidationException::withMessages(['media' => $violation]);
         }
@@ -173,7 +175,7 @@ class PostController extends Controller
             throw ValidationException::withMessages(['upload_token' => $violation]);
         }
 
-        AppendPostMedia::execute($post, [MediaItem::fromMedia($media, $request->validated('alt'))->toArray()], $request->user());
+        AppendPostMedia::execute($post, [HostInlineMedia::item($media, $request->validated())], $request->user());
 
         $post->refresh()->load(['socialAccount', 'labels']);
 

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Http\Middleware\App;
 
+use App\Actions\AccessToken\HasConnectedMcpClient;
+use App\Actions\Changelog\BuildChangelogProps;
 use App\Enums\Auth\SocialAuthProvider;
 use App\Enums\Media\Source as MediaSource;
 use App\Enums\Media\Type as MediaType;
@@ -18,13 +20,16 @@ use App\Http\Resources\App\HandleInertiaRequests\AuthWorkspaceResource;
 use App\Http\Resources\App\HandleInertiaRequests\ComposerResource;
 use App\Http\Resources\App\HandleInertiaRequests\SidebarChannelResource;
 use App\Http\Resources\App\PlanResource;
+use App\Models\Account;
 use App\Models\Plan;
+use App\Models\User;
 use App\Models\Workspace;
 use App\Support\Ai\AiModelCatalog;
 use App\Support\Ai\WritingStyleCatalog;
 use App\Support\HeicConverter;
 use App\Support\LinkTlds;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Inertia\Middleware;
 
 class HandleInertiaRequests extends Middleware
@@ -64,14 +69,13 @@ class HandleInertiaRequests extends Middleware
             'channels' => fn (): array => $user?->currentWorkspace
                 ? SidebarChannelResource::collection($user->currentWorkspace)
                 : [],
-            'referralSources' => fn (): ?array => $user !== null
-                && ! $isSelfHosted
-                && $account?->hasAppAccess()
-                && $user->getRawOriginal('referral_source') === null
+            'referralSources' => fn (): ?array => $this->showsReferralSources($user, $account, $isSelfHosted)
                     ? array_map(fn (ReferralSource $source): string => $source->value, ReferralSource::cases())
                     : null,
+            'mcpPrompt' => fn (): ?array => $this->mcpPrompt($user),
             'usage' => fn (): ?array => $account && ! $isSelfHosted ? $account->usage() : null,
             'features' => fn (): ?array => $account && ! $isSelfHosted ? $account->featureLimits() : null,
+            ...($user ? BuildChangelogProps::execute($user) : []),
             'flash' => $request->session()->get('flash', []),
             'applicationUrl' => config('app.url'),
             'env' => config('app.env'),
@@ -94,7 +98,7 @@ class HandleInertiaRequests extends Middleware
             'contentTypeMediaRules' => fn (): array => ContentType::mediaRulesForFrontend(),
             'defaultCropPresets' => fn (): array => ContentType::defaultCropPresets(),
             'plans' => function (): array {
-                if (config('trypost.self_hosted') || auth()->user()?->account === null) {
+                if (config('trypost.self_hosted') || blank(auth()->user()?->account)) {
                     return [];
                 }
 
@@ -103,14 +107,15 @@ class HandleInertiaRequests extends Middleware
                 )->resolve();
             },
             'legal' => fn (): array => [
-                'terms' => (string) config('trypost.legal.terms_url'),
-                'privacy' => (string) config('trypost.legal.privacy_url'),
+                'terms' => config('trypost.legal.terms_url'),
+                'privacy' => config('trypost.legal.privacy_url'),
             ],
             'languages' => fn (): array => Locale::options(),
             'aiEnabled' => fn (): bool => app(AiModelCatalog::class)->forFrontend()['options'] !== [],
             'googleAuthEnabled' => fn (): bool => SocialAuthProvider::Google->isEnabled(),
             'githubAuthEnabled' => fn (): bool => SocialAuthProvider::GitHub->isEnabled(),
-            ...($user !== null ? [
+            'toursEnabled' => fn (): bool => (bool) config('trypost.tours.enabled'),
+            ...(filled($user) ? [
                 'aiModels' => fn (): array => app(AiModelCatalog::class)->forFrontend(),
                 'aiWritingStyles' => fn (): array => app(WritingStyleCatalog::class)->forFrontend(),
                 'mediaSources' => fn (): array => ['menu' => MediaSource::menu()],
@@ -129,8 +134,62 @@ class HandleInertiaRequests extends Middleware
                     'heic' => HeicConverter::available(),
                 ],
             ] : []),
-            ...($workspace !== null ? ['composer' => ComposerResource::once($workspace)] : []),
-            ...($user !== null && config('trypost.platforms.x.defuse_links') ? ['xLinkTlds' => fn (): array => LinkTlds::all()] : []),
+            ...(filled($workspace) ? ['composer' => ComposerResource::once($workspace)] : []),
+            ...(filled($user) && config('trypost.platforms.x.defuse_links') ? ['xLinkTlds' => fn (): array => LinkTlds::all()] : []),
         ];
+    }
+
+    public static function referralSourcesCacheKey(User $user): string
+    {
+        return "referral-sources.{$user->id}";
+    }
+
+    public static function mcpPromptCacheKey(User $user, Workspace $workspace): string
+    {
+        return "mcp-connected.{$user->id}.{$workspace->id}";
+    }
+
+    /**
+     * The card inviting the user to connect an AI, with the MCP URL its steps
+     * show, while their workspace can use the app and has no AI of theirs
+     * connected; null otherwise. Only the connection is cached, so the card shows
+     * as soon as the account gets app access, and a connection made from the card
+     * forgets the cache. Dismissing the card is kept in the browser.
+     *
+     * @return array{mcp_url: string}|null
+     */
+    private function mcpPrompt(?User $user): ?array
+    {
+        $workspace = $user?->currentWorkspace;
+
+        if (blank($workspace) || $workspace->account?->hasAppAccess() !== true) {
+            return null;
+        }
+
+        $connected = Cache::remember(
+            self::mcpPromptCacheKey($user, $workspace),
+            now()->addMinutes(5),
+            fn (): bool => HasConnectedMcpClient::execute($user, $workspace),
+        );
+
+        if ($connected) {
+            return null;
+        }
+
+        return ['mcp_url' => route('mcp.trypost')];
+    }
+
+    private function showsReferralSources(?User $user, ?Account $account, bool $isSelfHosted): bool
+    {
+        if (blank($user) || $isSelfHosted || $account?->hasAppAccess() !== true) {
+            return false;
+        }
+
+        return Cache::remember(
+            self::referralSourcesCacheKey($user),
+            now()->addMinutes(5),
+            fn (): bool => blank($user->getRawOriginal('referral_source'))
+                && $user->created_at?->lte(now()->subHour()) === true,
+        );
     }
 }

@@ -13,7 +13,7 @@ import {
     IconUsers,
 } from '@tabler/icons-vue';
 import { trans, transChoice } from 'laravel-vue-i18n';
-import { computed, provide, ref, shallowRef, watch } from 'vue';
+import { computed, nextTick, provide, ref, shallowRef, watch } from 'vue';
 import { toast } from 'vue-sonner';
 
 import {
@@ -44,10 +44,9 @@ import PublishTabs from '@/components/publish/PublishTabs.vue';
 import QueueTimeline from '@/components/publish/QueueTimeline.vue';
 import { Button } from '@/components/ui/button';
 import { useWorkspaceEcho } from '@/composables/echo/useWorkspaceEcho';
-import { useBelowBreakpoint } from '@/composables/useBreakpoint';
+import { usePublishFilters } from '@/composables/publish/usePublishFilters';
 import { useComposerData } from '@/composables/useComposerData';
 import { useConnectChannelDialog } from '@/composables/useConnectChannelDialog';
-import { useDisplayTimezone } from '@/composables/useDisplayTimezone';
 import { openPostComposer } from '@/composables/useGlobalPostComposer';
 import {
     deletePostCardKey,
@@ -62,20 +61,13 @@ import type {
 } from '@/composables/usePostComposition';
 import { useShowPostingSlots } from '@/composables/useShowPostingSlots';
 import type { QueueSlotTarget } from '@/composables/useSortableQueue';
-import { provideViewTimezone } from '@/composables/useViewTimezone';
 import { useWorkspaceAbilities } from '@/composables/useWorkspaceAbilities';
 import date from '@/date';
 import dayjs from '@/dayjs';
 import AppLayout from '@/layouts/AppLayout.vue';
-import { calendar } from '@/routes/app';
-import {
-    calendar as channelCalendar,
-    grid,
-    publish,
-    settings,
-} from '@/routes/app/channels';
-import { index as postsIndex } from '@/routes/app/posts';
-import type { User } from '@/types';
+import { afterHistorySettles, cameFromAppPage } from '@/lib/inAppHistory';
+import { postAttemptAt } from '@/lib/postCard';
+import { grid, settings } from '@/routes/app/channels';
 import { PostStatus, ScheduleMode } from '@/types/post';
 import type { TimezoneOption } from '@/types/posting-schedule';
 import type {
@@ -128,73 +120,23 @@ const page = usePage();
 const { canManageAccounts, canManageTeam, canPublishDirectly } =
     useWorkspaceAbilities();
 
-const userTimezone = computed(
-    () => (page.props.auth.user as User).timezone || props.displayTimezone,
-);
-
-const { timezone, setTimezone, dayKey } = useDisplayTimezone(
-    props.displayTimezone,
-    props.timezones.map((option) => option.value),
-    () => props.tab,
-);
-
-provideViewTimezone(timezone);
-
-watch(
-    () => props.displayTimezone,
-    (value) => {
-        timezone.value = value;
-    },
-);
-
-const selectedLabelIds = ref<string[]>(props.filters.labels ?? []);
-const selectedUntagged = ref<boolean>(props.filters.untagged ?? false);
-const selectedChannelIds = ref<string[]>(props.filters.channels ?? []);
+const {
+    timezone,
+    setTimezone,
+    dayKey,
+    selectedLabelIds,
+    selectedUntagged,
+    selectedChannelIds,
+    filterQuery,
+    listUrlFor,
+    calendarHref,
+    boardHref,
+} = usePublishFilters(props, { currentTab: () => props.tab });
 
 const listUrl = (
     tab: PublishTab = props.tab,
     extra: Record<string, string> = {},
-): string => {
-    const query = {
-        tab,
-        labels: selectedLabelIds.value.length
-            ? selectedLabelIds.value
-            : undefined,
-        untagged: selectedUntagged.value ? '1' : undefined,
-        channels:
-            props.scope === 'all' && selectedChannelIds.value.length
-                ? selectedChannelIds.value
-                : undefined,
-        tz: timezone.value !== userTimezone.value ? timezone.value : undefined,
-        ...extra,
-    };
-
-    return props.channel
-        ? publish.url(props.channel.id, { query })
-        : postsIndex.url({ query });
-};
-
-const isPhone = useBelowBreakpoint('md');
-
-const calendarUrl = computed((): string => {
-    const query = {
-        labels: selectedLabelIds.value.length
-            ? selectedLabelIds.value
-            : undefined,
-        untagged: selectedUntagged.value ? '1' : undefined,
-        channels:
-            props.scope === 'all' && selectedChannelIds.value.length
-                ? selectedChannelIds.value
-                : undefined,
-        tz: timezone.value !== userTimezone.value ? timezone.value : undefined,
-    };
-
-    const view = isPhone.value ? 'days' : 'week';
-
-    return props.channel
-        ? channelCalendar.url({ account: props.channel.id, view }, { query })
-        : calendar.url({ view }, { query });
-});
+): string => listUrlFor({ tab, ...filterQuery(), ...extra });
 
 const applyFilters = (): void => {
     router.get(
@@ -235,7 +177,7 @@ const listGroups = computed<CardGroup[]>(() => {
         const at =
             props.tab === 'drafts' || props.tab === 'approvals'
                 ? post.scheduled_at
-                : (post.published_at ?? post.scheduled_at ?? post.created_at);
+                : postAttemptAt(post);
         const key = at ? dayKey(at) : NO_TIME;
 
         groups.set(key, [...(groups.get(key) ?? []), post]);
@@ -707,7 +649,7 @@ const initialPost = computed<ComposerInitialPost | null>(() => {
         schedule_mode: post.schedule_mode ?? null,
         queue_position: post.approval_queue_position ?? null,
         social_account_id: post.social_account_id,
-        content_type: post.content_type ?? '',
+        content_type: post.content_type ?? undefined,
         meta: post.meta ?? {},
         label_ids: post.labels?.map((label) => label.id) ?? [],
     };
@@ -748,20 +690,56 @@ const onComposerOpenChange = (open: boolean): void => {
     if (open) return;
 
     composerOpen.value = false;
+
+    if (cameFromAppPage()) {
+        window.history.back();
+
+        return;
+    }
+
     router.visit(listUrl(), { replace: true, preserveScroll: true });
 };
 
-const submitComposition = (composition: PostComposition): void => {
+/**
+ * After a save, steps back to the page the composer was opened from, so the
+ * edit leaves no history entry behind, and refreshes that page's posts.
+ */
+const returnToOpeningPage = (): void => {
+    void nextTick(() =>
+        afterHistorySettles(() => {
+            const stop = router.on('navigate', () => {
+                stop();
+                router.reload();
+            });
+            window.history.back();
+        }),
+    );
+};
+
+const submitComposition = (
+    composition: PostComposition,
+    _createAnother?: boolean,
+    onSaved?: () => void,
+): void => {
     const editPost = props.editPost;
     if (!editPost) return;
+    const returnsBack = cameFromAppPage();
+    let saved = false;
     composerSubmitting.value = true;
     const options = {
         preserveScroll: true,
+        replace: true,
         onSuccess: () => {
+            saved = true;
             composerOpen.value = false;
+            onSaved?.();
         },
         onFinish: () => {
             composerSubmitting.value = false;
+
+            if (saved && returnsBack) {
+                returnToOpeningPage();
+            }
         },
     };
     if (!initialPost.value) {
@@ -803,7 +781,10 @@ const submitComposition = (composition: PostComposition): void => {
         onSuccess: () => {
             options.onSuccess();
 
-            if (new URLSearchParams(window.location.search).has('edit')) {
+            if (
+                !returnsBack &&
+                new URLSearchParams(window.location.search).has('edit')
+            ) {
                 router.visit(listUrl(), {
                     replace: true,
                     preserveScroll: true,
@@ -839,6 +820,7 @@ const submitComposition = (composition: PostComposition): void => {
                         v-if="scope === 'all' && filterAccounts.length"
                         v-model="selectedChannelIds"
                         :channels="filterAccounts"
+                        sheet-below-sm
                     />
                     <PublishFilterMenu
                         :timezone="timezone"
@@ -861,12 +843,13 @@ const submitComposition = (composition: PostComposition): void => {
                             />
                         </template>
                     </PublishFilterMenu>
-                    <AppHeaderActions>
+                    <AppHeaderActions :on-phones="!channel">
                         <div class="flex items-center gap-2">
                             <ScheduleViewSwitch
                                 active-view="list"
                                 :list-href="listUrl()"
-                                :calendar-href="calendarUrl"
+                                :calendar-href="calendarHref"
+                                :board-href="boardHref"
                                 :grid-href="
                                     channel?.has_grid
                                         ? grid.url(channel.id)

@@ -15,6 +15,7 @@ return [
     'steps' => [
         'persona' => '关于你',
         'goals' => '你的目标',
+        'software' => '当前工具',
         'plan' => '套餐',
     ],
     'personas' => [
@@ -39,6 +40,14 @@ return [
         'manage_clients' => '管理品牌或客户',
         'other' => '其他需求',
     ],
-    'plan_title' => '选择你的套餐',
-    'plan_description' => '两个套餐功能相同，区别只在工作区数量，随时可以切换。',
+    'software_title' => '你目前在用哪个工具？',
+    'software' => [
+        'none' => '还没有使用任何工具',
+        'other' => '其他',
+    ],
+    'plan_title' => '激活你的账户',
+    'plan_description' => '连接你的账号，今天就排期第一条帖子。',
+    'plan_terms' => '之后 :price/月，随时取消',
+    'plan_checkout_button' => '激活我的账户',
+    'plan_cancel_anytime' => '随时取消',
 ];

@@ -15,6 +15,7 @@ return [
     'steps' => [
         'persona' => 'O Tobie',
         'goals' => 'Twoje cele',
+        'software' => 'Obecne narzędzie',
         'plan' => 'Plan',
     ],
     'personas' => [
@@ -39,6 +40,14 @@ return [
         'manage_clients' => 'Zarządzaj markami lub klientami',
         'other' => 'Coś innego',
     ],
-    'plan_title' => 'Wybierz plan',
-    'plan_description' => 'Oba plany mają te same funkcje. Różnią się liczbą workspace’ów, a plan możesz zmienić w każdej chwili.',
+    'software_title' => 'Z jakiego narzędzia korzystasz dziś?',
+    'software' => [
+        'none' => 'Jeszcze żadnego nie używam',
+        'other' => 'Inne',
+    ],
+    'plan_title' => 'Aktywuj swoje konto',
+    'plan_description' => 'Połącz kanały i zaplanuj pierwszy post już dziś.',
+    'plan_terms' => 'Potem :price/mies. Anuluj w dowolnym momencie',
+    'plan_checkout_button' => 'Aktywuj moje konto',
+    'plan_cancel_anytime' => 'Anuluj w dowolnym momencie',
 ];

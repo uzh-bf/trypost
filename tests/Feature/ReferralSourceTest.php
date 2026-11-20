@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Enums\PostHog\WelcomeEvent;
 use App\Enums\User\ReferralSource;
 use App\Jobs\PostHog\SendEvent;
+use App\Models\Account;
 use App\Models\User;
 use App\Models\Workspace;
 use Illuminate\Support\Facades\Bus;
@@ -12,7 +13,7 @@ use Illuminate\Support\Facades\Bus;
 beforeEach(function () {
     config(['trypost.self_hosted' => false]);
 
-    $this->user = User::factory()->create(['referral_source' => null]);
+    $this->user = User::factory()->create(['referral_source' => null, 'created_at' => now()->subDays(2)]);
     $workspace = Workspace::factory()->create([
         'account_id' => $this->user->account_id,
         'user_id' => $this->user->id,
@@ -32,7 +33,7 @@ test('a user inside the app who has not answered is asked where they found us', 
         ));
 });
 
-test('the question is not shared once answered, on self-hosted or before app access', function (Closure $setup) {
+test('the question is not shared once answered, on self-hosted, before app access or in the first hour', function (Closure $setup) {
     $setup($this->user);
 
     $this->actingAs($this->user->fresh())
@@ -44,11 +45,57 @@ test('the question is not shared once answered, on self-hosted or before app acc
     'answered' => [fn (User $user) => $user->update(['referral_source' => ReferralSource::Google->value])],
     'self-hosted' => [fn () => config(['trypost.self_hosted' => true])],
     'no app access' => [fn (User $user) => $user->account->subscriptions()->delete()],
+    'signed up less than an hour ago' => [fn (User $user) => $user->forceFill(['created_at' => now()->subMinutes(59)])->save()],
 ]);
+
+test('the question shows on the first page after subscribing, though Welcome was seen without app access', function (Closure $access) {
+    $this->user->account->subscriptions()->delete();
+
+    $this->actingAs($this->user->fresh())
+        ->followingRedirects()
+        ->get(route('app.calendar'))
+        ->assertInertia(fn ($page) => $page->where('referralSources', null));
+
+    $access($this->user->account->fresh());
+
+    $this->actingAs($this->user->fresh())
+        ->get(route('app.calendar'))
+        ->assertInertia(fn ($page) => $page->where(
+            'referralSources',
+            array_map(fn (ReferralSource $source): string => $source->value, ReferralSource::cases()),
+        ));
+})->with([
+    'trial without a card' => [fn (Account $account) => $account->forceFill(['trial_ends_at' => now()->addDays(7)])->save()],
+    'subscription' => [fn (Account $account) => subscribeAccount($account)],
+]);
+
+test('whether to ask is cached for five minutes', function () {
+    $this->user->forceFill(['created_at' => now()->subMinutes(58)])->save();
+
+    $this->actingAs($this->user->fresh())
+        ->get(route('app.calendar'))
+        ->assertInertia(fn ($page) => $page->where('referralSources', null));
+
+    $this->travel(4)->minutes();
+
+    $this->actingAs($this->user->fresh())
+        ->get(route('app.calendar'))
+        ->assertInertia(fn ($page) => $page->where('referralSources', null));
+
+    $this->travel(2)->minutes();
+
+    $this->actingAs($this->user->fresh())
+        ->get(route('app.calendar'))
+        ->assertInertia(fn ($page) => $page->whereNotNull('referralSources'));
+});
 
 test('answering stores the source, mirrors it to PostHog and goes back', function () {
     config(['services.posthog.enabled' => true, 'services.posthog.api_key' => 'phc_test']);
     Bus::fake();
+
+    $this->actingAs($this->user->fresh())
+        ->get(route('app.calendar'))
+        ->assertInertia(fn ($page) => $page->whereNotNull('referralSources'));
 
     $this->actingAs($this->user->fresh())
         ->from(route('app.calendar'))

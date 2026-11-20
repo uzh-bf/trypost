@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Enums\Analytics\PublicationContentType;
 use App\Enums\Analytics\SyncCollector;
 use App\Enums\Analytics\SyncStatus;
 use App\Enums\SocialAccount\Platform;
@@ -12,23 +13,144 @@ use App\Models\AnalyticsAccountDailySnapshot;
 use App\Models\AnalyticsPublication;
 use App\Models\AnalyticsPublicationDailySnapshot;
 use App\Models\AnalyticsSyncState;
+use App\Models\Post;
 use App\Models\SocialAccount;
 use App\Models\User;
 use App\Models\Workspace;
 use Illuminate\Support\Facades\Queue;
 
-function waitForWorkspaceInsightsTestId(mixed $page, string $testId): void
+function workspaceInsightsTestIdSelector(string $testId): string
 {
+    return json_encode("[data-testid=\"{$testId}\"]");
+}
+
+function clickWorkspaceInsightsTestIdUntilDialogOpens(mixed $page, string $testId): void
+{
+    $selector = workspaceInsightsTestIdSelector($testId);
+
     $page->script(<<<JS
         (async () => {
-            const selector = '[data-testid="{$testId}"]';
-            for (let attempt = 0; attempt < 600; attempt++) {
-                const element = document.querySelector(selector);
-                if (element && element.getBoundingClientRect().height > 0) return;
+            for (let attempt = 0; attempt < 100; attempt++) {
+                if (document.querySelector('[role="dialog"]')) return;
+                if (attempt % 10 === 0) document.querySelector({$selector}).click();
                 await new Promise((resolve) => setTimeout(resolve, 50));
             }
         })();
     JS);
+}
+
+/**
+ * @return list<string>
+ */
+function workspaceInsightsSectionTitles(mixed $page, ?string $withinTestId = null): array
+{
+    $scope = $withinTestId === null ? '' : "[data-testid=\"{$withinTestId}\"] ";
+    $selector = json_encode("{$scope}[data-testid=\"analytics-section-title\"]");
+
+    return $page->script("Array.from(document.querySelectorAll({$selector})).map((heading) => heading.textContent.trim())");
+}
+
+function workspaceInsightsInnerText(mixed $page, string $testId): ?string
+{
+    $selector = workspaceInsightsTestIdSelector($testId);
+
+    return $page->script("document.querySelector({$selector})?.innerText ?? null");
+}
+
+/**
+ * @return array{left: float, right: float, top: float, bottom: float, width: float, height: float}|null
+ */
+function workspaceInsightsRect(mixed $page, string $testId): ?array
+{
+    $selector = workspaceInsightsTestIdSelector($testId);
+
+    return $page->script(<<<JS
+        (() => {
+            const element = document.querySelector({$selector});
+            if (!element) return null;
+            const { left, right, top, bottom, width, height } = element.getBoundingClientRect();
+
+            return { left, right, top, bottom, width, height };
+        })();
+    JS);
+}
+
+function workspaceInsightsHasNoHorizontalOverflow(mixed $page): bool
+{
+    return $page->script('document.documentElement.scrollWidth <= window.innerWidth + 2');
+}
+
+function workspaceInsightsScrollerScrolls(mixed $page): bool
+{
+    return $page->script(<<<'JS'
+        (() => {
+            const scroller = document.querySelector('[data-testid="app-layout-scroller"]');
+
+            return ['auto', 'scroll'].includes(getComputedStyle(scroller).overflowY) && scroller.scrollHeight > scroller.clientHeight;
+        })();
+    JS);
+}
+
+function workspaceInsightsSpaceBelowLastSection(mixed $page): float
+{
+    return $page->script(<<<'JS'
+        (() => {
+            const scroller = document.querySelector('[data-testid="app-layout-scroller"]');
+            const lastSection = Array.from(document.querySelectorAll('[data-testid="analytics-section"]')).at(-1);
+
+            return scroller.scrollHeight - (lastSection.getBoundingClientRect().bottom - scroller.getBoundingClientRect().top + scroller.scrollTop);
+        })();
+    JS);
+}
+
+function workspaceInsightsHeaderSticksWhenScrolled(mixed $page): bool
+{
+    return $page->script(<<<'JS'
+        (() => {
+            const scroller = document.querySelector('[data-testid="app-layout-scroller"]');
+            scroller.scrollTop = scroller.scrollHeight;
+            const header = document.querySelector('[data-testid="analytics-page-header"]');
+            const toolbar = document.querySelector('[data-testid="analytics-toolbar"]');
+            const top = scroller.getBoundingClientRect().top;
+            const stuck = scroller.scrollTop > 0 && Math.abs(header.getBoundingClientRect().top - top) <= 1 && toolbar.getBoundingClientRect().bottom > top;
+            scroller.scrollTop = 0;
+
+            return stuck;
+        })();
+    JS);
+}
+
+/**
+ * @return array{before: int, during: list<int>, after: int}
+ */
+function workspaceInsightsChartWidthsAroundSidebarToggle(mixed $page): array
+{
+    return $page->script(<<<'JS'
+        (async () => {
+            const chart = () => document.querySelector('[data-testid="accounts-unovis-bar-chart"] [data-vis-xy-container]');
+            const before = chart().getBoundingClientRect().width;
+            document.querySelector('[data-testid="sidebar-footer-toggle"]').click();
+            const during = [];
+            const started = performance.now();
+            while (performance.now() - started < 180) {
+                await new Promise((resolve) => requestAnimationFrame(resolve));
+                during.push(Math.round(chart().getBoundingClientRect().width));
+            }
+            await new Promise((resolve) => setTimeout(resolve, 600));
+            return { before: Math.round(before), during, after: Math.round(chart().getBoundingClientRect().width) };
+        })();
+    JS);
+}
+
+function workspaceInsightsBrowserUser(): User
+{
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->create(['user_id' => $user->id, 'account_id' => $user->account_id]);
+    $workspace->members()->attach($user->id, membershipPivot('admin'));
+    $user->update(['current_workspace_id' => $workspace->id]);
+    subscribeAccount($user->account);
+
+    return $user->fresh();
 }
 
 test('workspace dashboard separates accounts and switches follower and post chart modes', function () {
@@ -74,16 +196,20 @@ test('workspace dashboard separates accounts and switches follower and post char
 
     $this->actingAs($user);
     $page = visit(route('app.insights'));
-    waitForWorkspaceInsightsTestId($page, 'analytics-summary-followers');
+    waitFor($page, '@analytics-summary-followers');
 
-    $page->assertVisible('@analytics-summary-followers')
-        ->assertScript('Array.from(document.querySelectorAll("[data-testid=analytics-section-title]")).map((heading) => heading.textContent.trim()).join("|")', 'Summary|Top 5 Posts|Performance|Followers|Posts')
-        ->assertSee('@first')
+    $page->assertVisible('@analytics-summary-followers');
+
+    expect(workspaceInsightsSectionTitles($page))->toBe(['Summary', 'Top 5 Posts', 'Performance', 'Followers', 'Posts']);
+
+    $page->assertSee('@first')
         ->assertSee('@second')
         ->assertSee('Top 5 Posts')
         ->assertPresent('@analytics-top-post')
         ->assertPresent('@header-icon')
         ->assertPresent('@insights-range-caption')
+        ->assertSeeIn('[data-testid="insights-range-caption"] [data-testid="analytics-range-previous"]', 'vs')
+        ->assertSeeIn('[data-testid="analytics-performance-caption"] [data-testid="analytics-range-previous"]', 'vs')
         ->assertSee('Performance')
         ->assertPresent('@accounts-unovis-bar-chart')
         ->hover('[data-testid="analytics-account-bar"] >> nth=0')
@@ -92,21 +218,30 @@ test('workspace dashboard separates accounts and switches follower and post char
         ->assertVisible('@followers-unovis-chart')
         ->click('@followers-growth')
         ->assertPresent('@accounts-unovis-bar-chart')
-        ->assertScript('document.querySelector("[data-testid=posts-bar]")?.getAttribute("aria-pressed")', 'true')
-        ->assertScript('document.querySelector("[data-testid=posts-stacked]")?.getAttribute("aria-pressed")', 'false')
+        ->assertAttribute('@posts-bar', 'aria-pressed', 'true')
+        ->assertAttribute('@posts-stacked', 'aria-pressed', 'false')
         ->assertPresent('@accounts-unovis-bar-chart')
         ->click('@posts-stacked')
         ->assertVisible('@posts-unovis-chart')
-        ->hover('[data-testid="analytics-post-bar"] >> nth=0')
+        ->assertScript('document.querySelector("[data-testid=posts-unovis-chart]").textContent.includes("Posts")', false)
+        ->hover('[data-testid="analytics-post-bar"] >> nth=0');
+    waitFor($page, '@analytics-tooltip-total');
+
+    $page->assertSeeIn('@analytics-tooltip-total', 'Total Posts')
+        ->assertSeeIn('@analytics-tooltip-total', '2')
         ->assertPresent('@analytics-tooltip-avatar')
-        ->click('@top-comments')
-        ->assertScript('(() => { const scroller = document.querySelector("[data-testid=app-layout-scroller]"); return ["auto", "scroll"].includes(getComputedStyle(scroller).overflowY) && scroller.scrollHeight > scroller.clientHeight; })()', true)
-        ->assertScript('(() => { const scroller = document.querySelector("[data-testid=app-layout-scroller]"); const lastSection = Array.from(document.querySelectorAll("[data-testid=analytics-section]")).at(-1); return scroller.scrollHeight - (lastSection.getBoundingClientRect().bottom - scroller.getBoundingClientRect().top + scroller.scrollTop) >= 24; })()', true)
-        ->assertScript('(() => { const scroller = document.querySelector("[data-testid=app-layout-scroller]"); scroller.scrollTop = scroller.scrollHeight; const header = document.querySelector("[data-testid=analytics-page-header]"); const toolbar = document.querySelector("[data-testid=analytics-toolbar]"); const top = scroller.getBoundingClientRect().top; const stuck = scroller.scrollTop > 0 && Math.abs(header.getBoundingClientRect().top - top) <= 1 && toolbar.getBoundingClientRect().bottom > top; scroller.scrollTop = 0; return stuck; })()', true)
-        ->resize(375, 812)
-        ->assertScript('document.querySelector("[data-testid=analytics-page-header]")?.getBoundingClientRect().top > document.querySelector("[data-testid=app-sidebar-trigger]")?.getBoundingClientRect().bottom', true)
-        ->assertScript('document.documentElement.scrollWidth <= window.innerWidth + 2', true)
-        ->assertNoJavaScriptErrors()
+        ->click('@top-comments');
+
+    expect(workspaceInsightsScrollerScrolls($page))->toBeTrue()
+        ->and(workspaceInsightsSpaceBelowLastSection($page))->toBeGreaterThanOrEqual(24)
+        ->and(workspaceInsightsHeaderSticksWhenScrolled($page))->toBeTrue();
+
+    $page->resize(375, 812);
+
+    expect(workspaceInsightsRect($page, 'analytics-page-header')['top'] ?? null)->toBeGreaterThan(workspaceInsightsRect($page, 'app-sidebar-trigger')['bottom'] ?? null)
+        ->and(workspaceInsightsHasNoHorizontalOverflow($page))->toBeTrue();
+
+    $page->assertNoJavaScriptErrors()
         ->assertNoConsoleLogs();
 });
 
@@ -119,7 +254,7 @@ test('workspace dashboard explains the empty state without inventing follower to
 
     $this->actingAs($user);
     $page = visit(route('app.insights'));
-    waitForWorkspaceInsightsTestId($page, 'analytics-empty-state');
+    waitFor($page, '@analytics-empty-state');
 
     $page->assertVisible('@analytics-empty-state')
         ->assertPresent('@app-layout-content')
@@ -127,21 +262,25 @@ test('workspace dashboard explains the empty state without inventing follower to
         ->assertMissing('@analytics-summary')
         ->assertSee('Turn your posts into insights')
         ->assertSee('Understand your performance and spot opportunities without the guesswork.')
-        ->assertScript('document.querySelectorAll("[data-testid=analytics-empty-tile]").length', 7)
+        ->assertCount('@analytics-empty-tile', 7)
         ->assertPresent('@analytics-empty-summary')
         ->assertPresent('@analytics-empty-top-posts')
         ->assertPresent('@analytics-empty-metrics')
-        ->assertScript('Array.from(document.querySelectorAll("[data-testid=analytics-empty-preview] [data-testid=analytics-section-title]")).map((heading) => heading.textContent.trim()).join("|")', 'Summary|Top 5 Posts|Metrics')
-        ->assertScript('document.querySelector("[data-testid=analytics-empty-summary]").innerText.replace(/\\s+/g, " ").trim()', 'Likes Comments Impressions Engagement rate')
-        ->assertScript('document.querySelector("[data-testid=analytics-empty-top-posts]").children.length', 5)
-        ->click('@analytics-empty-connect');
+        ->assertCount('[data-testid="analytics-empty-top-posts"] > *', 5);
 
-    waitForWorkspaceInsightsTestId($page, 'connect-channel-dialog');
+    expect(workspaceInsightsSectionTitles($page, 'analytics-empty-preview'))->toBe(['Summary', 'Top 5 Posts', 'Metrics'])
+        ->and(trim(preg_replace('/\s+/u', ' ', (string) workspaceInsightsInnerText($page, 'analytics-empty-summary'))))->toBe('Likes Comments Impressions Engagement rate');
+
+    $page->click('@analytics-empty-connect');
+
+    waitFor($page, '@connect-channel-dialog');
 
     $page->assertVisible('@connect-channel-dialog')
-        ->resize(375, 812)
-        ->assertScript('document.documentElement.scrollWidth <= window.innerWidth + 2', true)
-        ->assertNoJavaScriptErrors()
+        ->resize(375, 812);
+
+    expect(workspaceInsightsHasNoHorizontalOverflow($page))->toBeTrue();
+
+    $page->assertNoJavaScriptErrors()
         ->assertNoConsoleLogs();
 });
 
@@ -156,7 +295,7 @@ test('the empty insights hero explains pending data once a channel is connected'
 
     $this->actingAs($user);
     $page = visit(route('app.insights'));
-    waitForWorkspaceInsightsTestId($page, 'analytics-empty-state');
+    waitFor($page, '@analytics-empty-state');
 
     $page->assertVisible('@analytics-empty-state')
         ->assertSee('Your analytics history is being prepared')
@@ -176,7 +315,10 @@ test('the custom preset opens the calendar with quick ranges that apply a custom
     subscribeAccount($user->account);
     $account = SocialAccount::factory()->instagram()->create(['workspace_id' => $workspace->id]);
 
-    foreach (['2026-01-01', '2026-07-01'] as $date) {
+    $latestDay = now()->subMonths(3)->startOfDay();
+    $firstDay = $latestDay->subMonths(6);
+
+    foreach ([$firstDay, $latestDay] as $date) {
         AnalyticsAccountDailySnapshot::factory()->create([
             'workspace_id' => $workspace->id,
             'social_account_id' => $account->id,
@@ -184,42 +326,29 @@ test('the custom preset opens the calendar with quick ranges that apply a custom
             'platform' => $account->platform,
             'network' => $account->platform->network(),
             'platform_user_id' => $account->platform_user_id,
-            'date' => $date,
+            'date' => $date->toDateString(),
             'followers_count' => 100,
         ]);
     }
 
     $this->actingAs($user);
-    $page = visit(route('app.insights', ['start' => '2026-01-01', 'end' => '2026-02-01']));
-    waitForWorkspaceInsightsTestId($page, 'insights-range-custom');
+    $page = visit(route('app.insights', ['start' => $firstDay->toDateString(), 'end' => $firstDay->addMonth()->toDateString()]));
+    waitFor($page, '@insights-range-custom');
 
     $page->assertMissing('@date-range-picker-trigger')
-        ->assertScript('document.querySelector("[data-testid=insights-range-custom]")?.getAttribute("aria-pressed")', 'true')
-        ->assertScript('document.querySelector("[data-testid=insights-range-presets] [role=group]")?.getAttribute("aria-label")', 'Período')
+        ->assertAttribute('@insights-range-custom', 'aria-pressed', 'true')
+        ->assertAttribute('[data-testid="insights-range-presets"] [role=group]', 'aria-label', 'Período')
         ->assertPresent('@insights-range-custom');
-    $page->script(<<<'JS'
-        (async () => {
-            for (let attempt = 0; attempt < 100; attempt++) {
-                if (document.querySelector('[role="dialog"]')) return;
-                if (attempt % 10 === 0) document.querySelector('[data-testid="insights-range-custom"]').click();
-                await new Promise((resolve) => setTimeout(resolve, 50));
-            }
-        })();
-    JS);
+    clickWorkspaceInsightsTestIdUntilDialogOpens($page, 'insights-range-custom');
 
-    $page->assertScript('document.querySelector("[role=dialog]") !== null', true)
+    $page->assertPresent('[role=dialog]')
         ->assertSeeIn('@date-range-preset-last_7_days', __('common.date_range_picker.last_7_days', [], 'pt-BR'))
         ->click('@date-range-preset-last_7_days');
-    $page->script(<<<'JS'
-        (async () => {
-            for (let attempt = 0; attempt < 100; attempt++) {
-                if (location.search.includes('start=2026-06-25')) return;
-                await new Promise((resolve) => setTimeout(resolve, 50));
-            }
-        })();
-    JS);
+    waitForQueryParameter($page, 'start', $latestDay->subDays(6)->toDateString());
 
-    $page->assertScript('location.search.includes("range=custom") && location.search.includes("start=2026-06-25") && location.search.includes("end=2026-07-01")', true)
+    $page->assertQueryStringHas('range', 'custom')
+        ->assertQueryStringHas('start', $latestDay->subDays(6)->toDateString())
+        ->assertQueryStringHas('end', $latestDay->toDateString())
         ->assertNoJavaScriptErrors()
         ->assertNoConsoleLogs();
 });
@@ -245,20 +374,13 @@ test('a range preset on the workspace dashboard reloads with that range', functi
 
     $this->actingAs($user);
     $page = visit(route('app.insights'));
-    waitForWorkspaceInsightsTestId($page, 'insights-range-7d');
+    waitFor($page, '@insights-range-7d');
 
     $page->click('@insights-range-7d');
-    $page->script(<<<'JS'
-        (async () => {
-            for (let attempt = 0; attempt < 100; attempt++) {
-                if (new URLSearchParams(location.search).get('range') === '7d') return;
-                await new Promise((resolve) => setTimeout(resolve, 100));
-            }
-        })();
-    JS);
+    waitForQueryParameter($page, 'range', '7d');
 
-    $page->assertScript('new URLSearchParams(location.search).get("range")', '7d')
-        ->assertScript('document.querySelector("[data-testid=insights-range-7d]")?.getAttribute("aria-pressed")', 'true')
+    $page->assertQueryStringHas('range', '7d')
+        ->assertAttribute('@insights-range-7d', 'aria-pressed', 'true')
         ->assertNoJavaScriptErrors()
         ->assertNoConsoleLogs();
 });
@@ -274,7 +396,7 @@ test('dashboard refreshes when the first analytics snapshot arrives after openin
 
     $this->actingAs($user);
     $page = visit(route('app.insights'));
-    waitForWorkspaceInsightsTestId($page, 'analytics-empty-state');
+    waitFor($page, '@analytics-empty-state');
     $page->assertVisible('@analytics-empty-state');
 
     AnalyticsAccountDailySnapshot::factory()->create([
@@ -288,7 +410,7 @@ test('dashboard refreshes when the first analytics snapshot arrives after openin
         'followers_count' => 123,
     ]);
 
-    waitForWorkspaceInsightsTestId($page, 'analytics-summary-followers');
+    waitFor($page, '@analytics-summary-followers');
 
     $page->assertVisible('@analytics-summary-followers')
         ->assertNoJavaScriptErrors()
@@ -312,18 +434,11 @@ test('import progress disappears after the queued backfill finishes without navi
 
     $this->actingAs($user);
     $page = visit(route('app.insights'));
-    waitForWorkspaceInsightsTestId($page, 'analytics-import-coverage');
+    waitFor($page, '@analytics-import-coverage');
     $page->assertVisible('@analytics-import-coverage');
 
     $state->update(['status' => SyncStatus::Complete]);
-    $page->script(<<<'JS'
-        (async () => {
-            for (let attempt = 0; attempt < 100; attempt++) {
-                if (!document.querySelector('[data-testid="analytics-import-coverage"]')) return;
-                await new Promise((resolve) => setTimeout(resolve, 100));
-            }
-        })();
-    JS);
+    waitForGone($page, '@analytics-import-coverage');
 
     $page->assertMissing('@analytics-import-coverage')
         ->assertNoJavaScriptErrors()
@@ -363,9 +478,11 @@ test('follower chart localizes tooltip values and names accounts without usernam
     $page->assertPresent('@accounts-unovis-bar-chart')
         ->assertSee('Instagram')
         ->assertDontSee('instagram-facebook')
-        ->hover('[data-testid="analytics-account-bar"] >> nth=0')
-        ->assertScript('document.querySelector("[data-testid=analytics-chart-tooltip]")?.innerText.includes("1.234")', true)
-        ->assertNoJavaScriptErrors()
+        ->hover('[data-testid="analytics-account-bar"] >> nth=0');
+
+    expect(workspaceInsightsInnerText($page, 'analytics-chart-tooltip'))->toContain('1.234');
+
+    $page->assertNoJavaScriptErrors()
         ->assertNoConsoleLogs();
 });
 
@@ -381,7 +498,10 @@ test('workspace dashboard abbreviates large percentage changes in the user local
         'platform' => Platform::Instagram,
     ]);
 
-    foreach ([['2026-09-01 10:00:00', 1], ['2026-09-23 10:00:00', 1866]] as [$publishedAt, $reactions]) {
+    $rangeEnd = now()->subDays(20)->startOfDay();
+    $rangeStart = $rangeEnd->subDays(11);
+
+    foreach ([[$rangeStart->subDays(11)->setTime(10, 0), 1], [$rangeEnd->setTime(10, 0), 1866]] as [$publishedAt, $reactions]) {
         $publication = AnalyticsPublication::factory()->create([
             'workspace_id' => $workspace->id,
             'social_account_id' => $account->id,
@@ -397,10 +517,12 @@ test('workspace dashboard abbreviates large percentage changes in the user local
     }
 
     $this->actingAs($user);
-    $page = visit(route('app.insights', ['start' => '2026-09-12', 'end' => '2026-09-23']));
+    $page = visit(route('app.insights', ['start' => $rangeStart->toDateString(), 'end' => $rangeEnd->toDateString()]));
+    waitFor($page, '@analytics-summary-reactions-change');
 
-    $page->assertScript('document.querySelector("[data-testid=analytics-summary-reactions-change]")?.innerText.includes('.json_encode($expectedChange).')', true)
-        ->assertDontSee('+186500%')
+    expect(workspaceInsightsInnerText($page, 'analytics-summary-reactions-change'))->toContain($expectedChange);
+
+    $page->assertDontSee('+186500%')
         ->assertNoJavaScriptErrors()
         ->assertNoConsoleLogs();
 })->with([
@@ -416,14 +538,14 @@ test('the channel filter offers to connect a channel when the workspace has none
 
     $this->actingAs($user);
     $page = visit(route('app.insights'));
-    waitForWorkspaceInsightsTestId($page, 'analytics-channel-filter');
+    waitFor($page, '@analytics-channel-filter');
 
     $page->click('@analytics-channel-filter');
-    waitForWorkspaceInsightsTestId($page, 'analytics-channel-connect');
+    waitFor($page, '@analytics-channel-connect');
 
     $page->assertSeeIn('@analytics-channel-connect', __('channels.connect'))
         ->click('@analytics-channel-connect');
-    waitForWorkspaceInsightsTestId($page, 'connect-channel-dialog');
+    waitFor($page, '@connect-channel-dialog');
 
     $page->assertVisible('@connect-channel-dialog')->assertNoJavaScriptErrors();
 });
@@ -449,28 +571,80 @@ test('on a phone the workspace insights range presets collapse into a dropdown',
 
     $this->actingAs($user);
     $page = visit(route('app.insights'))->resize(390, 844);
-    waitForWorkspaceInsightsTestId($page, 'insights-range-mobile-trigger');
+    waitFor($page, '@insights-range-mobile-trigger');
 
-    $page->assertScript('document.querySelector("[data-testid=insights-range-7d]").getBoundingClientRect().height', 0)
-        ->assertSeeIn('@insights-range-mobile-trigger', '30 Days')
+    expect(workspaceInsightsRect($page, 'insights-range-7d')['height'] ?? null)->toBe(0);
+
+    $page->assertSeeIn('@insights-range-mobile-trigger', '30 Days')
         ->click('@insights-range-mobile-trigger');
-    waitForWorkspaceInsightsTestId($page, 'insights-range-mobile-30d-check');
+    waitFor($page, '@insights-range-mobile-30d-check');
 
     $page->assertPresent('@insights-range-mobile-30d-check')
         ->assertMissing('@insights-range-mobile-7d-check')
         ->click('@insights-range-mobile-7d');
-    $page->script(<<<'JS'
-        (async () => {
-            for (let attempt = 0; attempt < 100; attempt++) {
-                if (new URLSearchParams(location.search).get('range') === '7d') return;
-                await new Promise((resolve) => setTimeout(resolve, 100));
-            }
-        })();
-    JS);
+    waitForQueryParameter($page, 'range', '7d');
 
-    $page->assertScript('new URLSearchParams(location.search).get("range")', '7d')
+    $page->assertQueryStringHas('range', '7d')
         ->assertSeeIn('@insights-range-mobile-trigger', '7 Days')
         ->assertNoJavaScriptErrors();
+});
+
+test('the custom range calendar opens under Custom on desktop and as a bottom sheet on a phone', function () {
+    Queue::fake([BootstrapAccountAnalytics::class, CollectAccountDailySnapshot::class]);
+    $user = workspaceInsightsBrowserUser();
+    $account = SocialAccount::factory()->instagram()->create(['workspace_id' => $user->current_workspace_id]);
+    AnalyticsAccountDailySnapshot::factory()->create([
+        'workspace_id' => $user->current_workspace_id,
+        'social_account_id' => $account->id,
+        'social_account_key' => $account->id,
+        'platform' => $account->platform,
+        'network' => $account->platform->network(),
+        'platform_user_id' => $account->platform_user_id,
+        'date' => now('UTC')->subDays(40)->toDateString(),
+        'followers_count' => 100,
+    ]);
+    $this->actingAs($user);
+
+    $page = visit(route('app.insights'))->resize(1440, 900);
+    waitFor($page, '@insights-range-custom');
+    $page->click('@insights-range-custom');
+    waitFor($page, '[data-slot="popover-content"]');
+
+    $alignment = $page->script(<<<'JS'
+        (() => {
+            const custom = document.querySelector('[data-testid="insights-range-custom"]').getBoundingClientRect();
+            const calendar = document.querySelector('[data-slot="popover-content"]').getBoundingClientRect();
+
+            return { offset: Math.abs(calendar.left - custom.left), below: calendar.top >= custom.bottom };
+        })()
+    JS);
+
+    expect($alignment['offset'])->toBeLessThanOrEqual(2)
+        ->and($alignment['below'])->toBeTrue();
+    $page->assertNoJavaScriptErrors();
+
+    $phone = visit(route('app.insights'))->resize(390, 844);
+    waitFor($phone, '@insights-range-mobile-trigger');
+    $phone->click('@insights-range-mobile-trigger');
+    waitFor($phone, '@insights-range-mobile-custom');
+    $phone->click('@insights-range-mobile-custom');
+    waitForState($phone, '@date-range-picker-sheet', 'element.getBoundingClientRect().bottom >= window.innerHeight - 1');
+
+    $sheet = $phone->script(<<<'JS'
+        (() => {
+            const sheet = document.querySelector('[data-testid="date-range-picker-sheet"]').getBoundingClientRect();
+
+            return {
+                fullWidth: Math.round(sheet.left) === 0 && Math.round(sheet.right) === window.innerWidth,
+                hasCalendar: Boolean(document.querySelector('[data-testid="date-range-picker-sheet"] [data-slot="range-calendar-grid"]')),
+                noPopover: !document.querySelector('[data-slot="popover-content"]'),
+            };
+        })()
+    JS);
+
+    expect($sheet)->toBe(['fullWidth' => true, 'hasCalendar' => true, 'noPopover' => true])
+        ->and(workspaceInsightsHasNoHorizontalOverflow($phone))->toBeTrue();
+    $phone->assertNoJavaScriptErrors();
 });
 
 test('charts keep their width while the sidebar animates and resize once it settles', function () {
@@ -500,26 +674,198 @@ test('charts keep their width while the sidebar animates and resize once it sett
 
     $this->actingAs($user);
     $page = visit(route('app.insights'))->resize(1440, 900);
-    waitForWorkspaceInsightsTestId($page, 'accounts-unovis-bar-chart');
-    waitForWorkspaceInsightsTestId($page, 'sidebar-footer-toggle');
+    waitFor($page, '@accounts-unovis-bar-chart');
+    waitFor($page, '@sidebar-footer-toggle');
 
-    $widths = $page->script(<<<'JS'
-        (async () => {
-            const chart = () => document.querySelector('[data-testid="accounts-unovis-bar-chart"] [data-vis-xy-container]');
-            const before = chart().getBoundingClientRect().width;
-            document.querySelector('[data-testid="sidebar-footer-toggle"]').click();
-            const during = [];
-            const started = performance.now();
-            while (performance.now() - started < 180) {
-                await new Promise((resolve) => requestAnimationFrame(resolve));
-                during.push(Math.round(chart().getBoundingClientRect().width));
-            }
-            await new Promise((resolve) => setTimeout(resolve, 600));
-            return { before: Math.round(before), during, after: Math.round(chart().getBoundingClientRect().width) };
-        })();
-    JS);
+    $widths = workspaceInsightsChartWidthsAroundSidebarToggle($page);
 
     expect(array_unique($widths['during']))->toBe([$widths['before']])
         ->and($widths['after'])->toBeGreaterThan($widths['before']);
     $page->assertNoJavaScriptErrors();
+});
+
+test('top posts name the network each post went out on and leave the post type out', function () {
+    Queue::fake([BootstrapAccountAnalytics::class, CollectAccountDailySnapshot::class]);
+    $user = workspaceInsightsBrowserUser();
+    $workspace = $user->currentWorkspace;
+    $publications = [];
+
+    foreach ([
+        'reel' => [Platform::Instagram, PublicationContentType::Reel],
+        'image' => [Platform::Instagram, PublicationContentType::Image],
+        'tiktok' => [Platform::TikTok, PublicationContentType::Video],
+    ] as $key => [$platform, $contentType]) {
+        $account = SocialAccount::factory()->create(['workspace_id' => $workspace->id, 'platform' => $platform]);
+        $publications[$key] = AnalyticsPublication::factory()->create([
+            'workspace_id' => $workspace->id,
+            'social_account_id' => $account->id,
+            'social_account_key' => $account->id,
+            'platform' => $platform,
+            'network' => $platform->network(),
+            'content_type' => $contentType,
+            'provider_published_at' => now()->subDays(3)->setTime(10, 0),
+        ]);
+        AnalyticsPublicationDailySnapshot::factory()->create(['publication_id' => $publications[$key]->id, 'reactions_count' => 10]);
+    }
+
+    $verified = SocialAccount::factory()->x()->create(['workspace_id' => $workspace->id, 'meta' => ['x_verified_type' => 'blue']]);
+    $publications['x'] = AnalyticsPublication::factory()->create([
+        'workspace_id' => $workspace->id,
+        'social_account_id' => $verified->id,
+        'social_account_key' => $verified->id,
+        'platform' => Platform::X,
+        'network' => Platform::X->network(),
+        'provider_published_at' => now()->subDays(3)->setTime(10, 0),
+    ]);
+    AnalyticsPublicationDailySnapshot::factory()->create(['publication_id' => $publications['x']->id, 'reactions_count' => 10]);
+
+    $this->actingAs($user);
+    $page = visit(route('app.insights'));
+    waitFor($page, "@analytics-top-post-published-via-{$publications['reel']->id}");
+
+    $page->assertSeeIn("@analytics-top-post-published-via-{$publications['reel']->id}", 'Published via')
+        ->assertSeeIn("@analytics-top-post-published-via-{$publications['reel']->id}", 'Instagram')
+        ->assertSeeIn("@analytics-top-post-published-via-{$publications['tiktok']->id}", 'TikTok')
+        ->assertPresent("[data-testid=\"analytics-top-post-channel\"] [data-testid=\"channel-avatar-verified-{$verified->id}\"]")
+        ->assertMissing("[data-testid=\"analytics-top-post-channel\"] [data-testid=\"channel-avatar-verified-{$publications['tiktok']->social_account_id}\"]")
+        ->assertScript("document.querySelectorAll('[data-testid=\"analytics-section\"] [data-testid=\"channel-avatar-verified-{$verified->id}\"]').length >= 3", true)
+        ->assertMissing("@analytics-top-post-type-{$publications['reel']->id}")
+        ->assertDontSee('Published on the social network')
+        ->assertNoJavaScriptErrors();
+});
+
+test('top posts show the post media from our bucket, a video by its cover frame', function () {
+    Queue::fake([BootstrapAccountAnalytics::class, CollectAccountDailySnapshot::class]);
+    $user = workspaceInsightsBrowserUser();
+    $workspace = $user->currentWorkspace;
+    $account = SocialAccount::factory()->create(['workspace_id' => $workspace->id, 'platform' => Platform::Instagram]);
+    $publications = [];
+
+    foreach ([
+        'video' => ['id' => 'video', 'path' => 'medias/reel.mp4', 'url' => 'https://cdn.trypost.test/medias/reel.mp4', 'type' => 'video', 'mime_type' => 'video/mp4'],
+        'image' => ['id' => 'image', 'path' => 'medias/a.jpg', 'url' => 'http://trypost.test/storage/medias/a.jpg', 'type' => 'image', 'mime_type' => 'image/jpeg'],
+    ] as $key => $media) {
+        $post = Post::factory()->forAccount($account)->published()->create(['media' => [$media]]);
+        $publications[$key] = AnalyticsPublication::factory()->create([
+            'workspace_id' => $workspace->id,
+            'social_account_id' => $account->id,
+            'social_account_key' => $account->id,
+            'post_id' => $post->id,
+            'platform' => Platform::Instagram,
+            'network' => Platform::Instagram->network(),
+            'preview_metadata' => ['thumbnail_url' => 'https://scontent.cdninstagram.com/expired.jpg?oe=6ACC450F'],
+            'provider_published_at' => now()->subDays(3)->setTime(10, 0),
+        ]);
+        AnalyticsPublicationDailySnapshot::factory()->create(['publication_id' => $publications[$key]->id, 'reactions_count' => 10]);
+    }
+
+    $this->actingAs($user);
+    $page = visit(route('app.insights'));
+    waitFor($page, "@analytics-top-post-video-{$publications['video']->id}");
+
+    $page->assertAttribute("@analytics-top-post-video-{$publications['video']->id}", 'src', 'https://cdn.trypost.test/medias/reel.mp4#t=0.1')
+        ->assertScript("Array.from(document.querySelectorAll('[data-testid=\"analytics-top-post\"] img')).map((image) => image.getAttribute('src')).includes('http://trypost.test/storage/medias/a.jpg')", true)
+        ->assertNoJavaScriptErrors();
+});
+
+test('the range caption names each period in full at its edges', function (string $start, string $end, string $current, string $previous, Locale $locale = Locale::DEFAULT) {
+    Queue::fake([BootstrapAccountAnalytics::class, CollectAccountDailySnapshot::class]);
+    $user = User::factory()->create(['locale' => $locale]);
+    $workspace = Workspace::factory()->create(['user_id' => $user->id, 'account_id' => $user->account_id]);
+    $workspace->members()->attach($user->id, membershipPivot('admin'));
+    $user->update(['current_workspace_id' => $workspace->id]);
+    subscribeAccount($user->account);
+    $account = SocialAccount::factory()->create(['workspace_id' => $workspace->id, 'platform' => Platform::Instagram]);
+    foreach ([$start, $end] as $day) {
+        AnalyticsPublication::factory()->create([
+            'workspace_id' => $workspace->id,
+            'social_account_id' => $account->id,
+            'social_account_key' => $account->id,
+            'platform' => Platform::Instagram,
+            'network' => Platform::Instagram->network(),
+            'provider_published_at' => "{$day} 10:00:00",
+        ]);
+    }
+
+    $this->actingAs($user);
+    $page = visit(route('app.insights', ['start' => $start, 'end' => $end]));
+    waitFor($page, '@insights-range-caption');
+
+    expect(workspaceInsightsInnerText($page, 'analytics-range-current'))->toBe($current)
+        ->and(trim((string) $page->script('document.querySelector(\'[data-testid="insights-range-caption"] [data-testid="analytics-range-previous"]\')?.innerText ?? ""')))->toBe($previous);
+
+    $page->assertNoJavaScriptErrors();
+})->with([
+    'one day' => ['2026-01-10', '2026-01-10', '10 Jan 2026', 'vs 9 Jan'],
+    'a previous period across New Year' => ['2026-01-04', '2026-01-10', '4 – 10 Jan 2026', 'vs 28 Dec 2025 – 3 Jan 2026'],
+    'periods across a month' => ['2026-10-02', '2026-10-08', '2 – 8 Oct 2026', 'vs 25 Sep – 1 Oct'],
+    'in Portuguese' => ['2026-10-02', '2026-10-08', '2 – 8 out 2026', 'vs. 25 set – 1 out', Locale::PortugueseBrazil],
+]);
+
+test('on a phone the custom range applies the two days picked in its sheet', function () {
+    Queue::fake([BootstrapAccountAnalytics::class, CollectAccountDailySnapshot::class]);
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->create(['user_id' => $user->id, 'account_id' => $user->account_id]);
+    $workspace->members()->attach($user->id, membershipPivot('admin'));
+    $user->update(['current_workspace_id' => $workspace->id]);
+    subscribeAccount($user->account);
+    $account = SocialAccount::factory()->create(['workspace_id' => $workspace->id, 'platform' => Platform::Instagram]);
+
+    foreach (range(0, 40) as $daysAgo) {
+        AnalyticsAccountDailySnapshot::factory()->create([
+            'workspace_id' => $workspace->id,
+            'social_account_id' => $account->id,
+            'social_account_key' => $account->id,
+            'platform' => Platform::Instagram,
+            'network' => Platform::Instagram->network(),
+            'platform_user_id' => $account->platform_user_id,
+            'date' => now('UTC')->subDays($daysAgo)->toDateString(),
+            'followers_count' => 100,
+        ]);
+    }
+
+    $this->actingAs($user);
+    $page = visit(route('app.insights'))->resize(390, 844);
+    waitFor($page, '@insights-range-mobile-trigger');
+    $page->click('@insights-range-mobile-trigger');
+    waitFor($page, '@insights-range-mobile-custom');
+    $page->click('@insights-range-mobile-custom');
+    waitFor($page, '@date-range-picker-sheet [data-slot="range-calendar-trigger"]');
+
+    $days = $page->script(<<<'JS'
+        Array.from(document.querySelectorAll('[data-testid="date-range-picker-sheet"] [data-slot="range-calendar-trigger"]'))
+            .filter((day) => !day.hasAttribute('data-disabled') && !day.hasAttribute('data-outside-view'))
+            .slice(0, 2)
+            .map((day) => day.dataset.value)
+    JS);
+
+    foreach ($days as $day) {
+        $page->click("[data-testid=\"date-range-picker-sheet\"] [data-slot=\"range-calendar-trigger\"][data-value=\"{$day}\"]");
+    }
+
+    waitForQueryParameter($page, 'end', $days[1]);
+
+    $page->assertQueryStringHas('range', 'custom')
+        ->assertQueryStringHas('start', $days[0])
+        ->assertQueryStringHas('end', $days[1])
+        ->assertNoJavaScriptErrors();
+});
+
+test('on a phone the custom range stays off until the workspace has data', function () {
+    Queue::fake([BootstrapAccountAnalytics::class, CollectAccountDailySnapshot::class]);
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->create(['user_id' => $user->id, 'account_id' => $user->account_id]);
+    $workspace->members()->attach($user->id, membershipPivot('admin'));
+    $user->update(['current_workspace_id' => $workspace->id]);
+    subscribeAccount($user->account);
+    SocialAccount::factory()->create(['workspace_id' => $workspace->id, 'platform' => Platform::Instagram]);
+
+    $this->actingAs($user);
+    $page = visit(route('app.insights'))->resize(390, 844);
+    waitFor($page, '@insights-range-mobile-trigger');
+    $page->click('@insights-range-mobile-trigger');
+    waitFor($page, '@insights-range-mobile-custom');
+
+    $page->assertAttribute('@insights-range-mobile-custom', 'data-disabled', '')
+        ->assertNoJavaScriptErrors();
 });

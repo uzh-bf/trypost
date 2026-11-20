@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 return [
     'bluesky' => [
         'title' => 'ربط Bluesky',
@@ -54,6 +56,7 @@ return [
         'description' => 'تعتمد الميزات على نوع حسابك على Instagram وطريقة الربط التي تختارها.',
         'professional_title' => 'احترافي',
         'professional_types' => '(نشاط تجاري وصانع محتوى)',
+        'facebook_types' => '(مرتبط بصفحة على Facebook)',
         'badge' => 'نشر تلقائي',
         'features' => [
             'automatic' => [
@@ -64,11 +67,13 @@ return [
                 'title' => 'مقاييس المنشورات المرسلة',
                 'description' => 'اطّلع على أداء المنشورات السابقة',
             ],
+            'music' => [
+                'title' => 'موسيقى في مقاطع ريلز',
+                'description' => 'أضف مقطعًا موسيقيًا من مكتبة Instagram',
+            ],
         ],
         'connect' => 'الربط مع Instagram',
         'convert_hint' => 'سيطلب منك Instagram التحويل بسهولة إلى حساب احترافي عند الحاجة.',
-        'facebook_link' => 'اربط Instagram عبر Facebook',
-        'facebook_suffix' => 'إذا كان حسابك على Instagram مرتبطًا حاليًا بـ Facebook.',
         'help' => [
             'account_type' => 'معرفة نوع حسابك على Instagram',
             'convert' => 'تحويل حسابك على Instagram إلى حساب احترافي',

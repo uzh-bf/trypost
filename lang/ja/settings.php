@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 return [
     'title' => '設定',
     'description' => 'プロフィールとアカウントの設定を管理します',
@@ -9,13 +11,11 @@ return [
         'groups' => [
             'personal' => '個人',
             'workspace' => 'ワークスペース',
-            'features' => '機能',
-            'developers' => '開発者',
-            'account' => 'アカウント',
+            'content' => 'コンテンツ',
+            'integrations' => '連携',
         ],
         'items' => [
             'profile' => 'プロフィール',
-            'authentication' => '認証',
             'notifications' => '通知',
             'preferences' => '環境設定',
             'general' => '一般',
@@ -24,7 +24,7 @@ return [
             'signatures' => '署名',
             'labels' => 'ラベル',
             'webhooks' => 'ウェブフック',
-            'api_keys' => 'API キー',
+            'api_keys' => 'API',
             'mcp' => 'MCP',
             'billing' => 'お支払い',
         ],
@@ -41,7 +41,7 @@ return [
         'account_disconnected' => 'アカウントの接続が解除されたとき',
         'account_disconnected_description' => 'ソーシャルアカウントの接続が解除されたときにメールを受け取ります',
         'post_note_added' => '投稿への新しいメモ',
-        'post_note_added_description' => 'チームメンバーが投稿にメモを追加したときにメールを受け取ります',
+        'post_note_added_description' => 'チームメンバーがメモであなたをメンションしたとき、またはあなたが作成・メモした投稿にメモを追加したときにメールを受け取ります',
         'collaboration' => 'コラボレーション',
         'collaboration_description' => '承認リクエストや、承認・却下された投稿についてメールを受け取る',
         'save_failed' => '通知設定を保存できませんでした。もう一度お試しください。',
@@ -100,27 +100,23 @@ return [
         'resend_verification' => 'こちらをクリックして確認メールを再送信してください。',
         'verification_sent' => '新しい確認リンクをメールアドレスに送信しました。',
         'save' => '保存',
-    ],
-
-    'authentication' => [
-        'title' => '認証',
-        'page_title' => '認証設定',
+        'tabs' => [
+            'profile' => 'プロフィール',
+            'login' => 'パスワードとログイン',
+            'sessions' => 'セッション',
+        ],
         'sessions' => [
             'title' => 'アクティブなセッション',
             'description' => '不審な点に気づいた場合は、他のデバイスからログアウトしてください。',
             'unknown_browser' => '不明なブラウザ',
-            'unknown_ip' => '不明な IP',
             'on' => '·',
             'active_now' => '現在アクティブ',
+            'last_activity' => '最終アクティビティ：:time',
             'log_out_others' => '他のデバイスからログアウト',
             'modal_title' => '他のデバイスからログアウト',
-            'modal_description_password' => '他のブラウザセッションからログアウトすることを確認するため、現在のパスワードを入力してください。',
-            'modal_description_email' => '他のブラウザセッションからログアウトすることを確認するため、メールアドレスを入力してください。',
-            'password_placeholder' => '現在のパスワード',
-            'email_placeholder' => 'アカウントのメールアドレス',
+            'modal_description' => 'アカウントにログインしている他のすべてのデバイスからログアウトします。このセッションはそのまま使えます。',
             'cancel' => 'キャンセル',
             'submit' => '他のデバイスからログアウト',
-            'email_mismatch' => 'メールアドレスがアカウントと一致しません。',
             'flash_logged_out' => '他のデバイスからログアウトしました。',
         ],
         'password' => [

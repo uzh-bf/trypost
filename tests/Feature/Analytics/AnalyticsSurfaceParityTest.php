@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Dto\MediaItem;
 use App\Enums\Analytics\PublicationContentType;
 use App\Enums\Analytics\PublicationOrigin;
 use App\Enums\SocialAccount\Platform;
@@ -10,14 +11,19 @@ use App\Jobs\Analytics\CollectAccountDailySnapshot;
 use App\Mcp\Servers\TryPostServer;
 use App\Mcp\Tools\Analytics\GetAnalyticsPublicationTool;
 use App\Mcp\Tools\Analytics\GetAnalyticsReportTool;
+use App\Mcp\Tools\Analytics\GetChannelInsightsTool;
+use App\Mcp\Tools\Analytics\ListChannelPublicationsTool;
 use App\Models\AnalyticsAccountDailySnapshot;
 use App\Models\AnalyticsPublication;
 use App\Models\AnalyticsPublicationDailySnapshot;
+use App\Models\Media;
+use App\Models\Post;
 use App\Models\SocialAccount;
 use App\Models\User;
 use App\Models\Workspace;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Testing\Fluent\AssertableJson;
 use Inertia\Testing\AssertableInertia as Assert;
 
@@ -110,6 +116,137 @@ test('web API and MCP expose the same workspace analytics report and date bounds
             ->etc());
 
     Http::assertNothingSent();
+});
+
+test('analytics API and MCP sign owned media while web and provider thumbnails keep stable URLs', function () {
+    $access = createApiTestToken();
+    $workspace = $access['workspace'];
+    config(['filesystems.default' => 'azure', 'filesystems.disks.azure.driver' => 'azure-flat']);
+    Storage::fake('azure');
+    Storage::disk('azure')->buildTemporaryUrlsUsing(
+        fn (string $path): string => 'https://example.blob.core.windows.net/media/'.rawurlencode($path).'?sp=r&sig=synthetic',
+    );
+
+    $account = SocialAccount::factory()->instagram()->create(['workspace_id' => $workspace->id]);
+    $media = Media::factory()->temporaryUpload($workspace)->create([
+        'path' => 'medias/analytics.jpg',
+        'mime_type' => 'image/jpeg',
+    ]);
+    Storage::put($media->path, 'synthetic-image');
+    $post = Post::factory()->forAccount($account)->published()->create([
+        'user_id' => $access['user']->id,
+        'media' => [MediaItem::fromMedia($media)->toArray()],
+    ]);
+    $providerThumbnail = 'https://scontent.cdninstagram.com/analytics.jpg?oe=6ACC450F';
+    $publication = AnalyticsPublication::factory()->create([
+        'workspace_id' => $workspace->id,
+        'social_account_id' => $account->id,
+        'social_account_key' => $account->id,
+        'network' => $account->platform->network(),
+        'platform_user_id' => $account->platform_user_id,
+        'platform' => $account->platform,
+        'post_id' => $post->id,
+        'origin' => PublicationOrigin::TryPost,
+        'provider_published_at' => '2026-09-20 10:00:00',
+        'preview_metadata' => ['thumbnail_url' => $providerThumbnail],
+    ]);
+    AnalyticsPublicationDailySnapshot::factory()->create([
+        'publication_id' => $publication->id,
+        'date' => '2026-09-20',
+        'reactions_count' => 8,
+        'comments_count' => 2,
+    ]);
+    $externalProviderThumbnail = 'https://scontent.cdninstagram.com/external.jpg?oe=6ACC4510';
+    $externalPublication = AnalyticsPublication::factory()->create([
+        'workspace_id' => $workspace->id,
+        'social_account_id' => $account->id,
+        'social_account_key' => $account->id,
+        'network' => $account->platform->network(),
+        'platform_user_id' => $account->platform_user_id,
+        'platform' => $account->platform,
+        'post_id' => null,
+        'origin' => PublicationOrigin::External,
+        'provider_published_at' => '2026-09-19 10:00:00',
+        'preview_metadata' => ['thumbnail_url' => $externalProviderThumbnail],
+    ]);
+    AnalyticsPublicationDailySnapshot::factory()->create([
+        'publication_id' => $externalPublication->id,
+        'date' => '2026-09-19',
+        'reactions_count' => 1,
+        'comments_count' => 1,
+    ]);
+
+    $range = ['start' => '2026-09-01', 'end' => '2026-09-30'];
+    $webUrl = route('app.media.view', $media);
+    $signedUrl = 'https://example.blob.core.windows.net/media/'.rawurlencode($media->path).'?sp=r&sig=synthetic';
+
+    $this->actingAs($access['user'])
+        ->get(route('app.insights', $range))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('report.top_posts.reactions.0.media.url', $webUrl)
+            ->where('report.top_posts.reactions.0.preview_metadata.thumbnail_url', $providerThumbnail)
+            ->where('report.top_posts.reactions.1.media', null)
+            ->where('report.top_posts.reactions.1.preview_metadata.thumbnail_url', $externalProviderThumbnail)
+            ->etc());
+    $this->actingAs($access['user'])
+        ->get(route('app.channels.insights', ['account' => $account, ...$range]))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('publications.data.0.media.url', $webUrl)
+            ->where('publications.data.0.thumbnail_url', $webUrl)
+            ->where('publications.data.1.media', null)
+            ->where('publications.data.1.thumbnail_url', $externalProviderThumbnail)
+            ->etc());
+    auth()->forgetGuards();
+
+    $this->withHeaders(['Authorization' => 'Bearer '.$access['plain_token']])
+        ->getJson(route('api.analytics.index', $range))
+        ->assertOk()
+        ->assertJsonPath('top_posts.reactions.0.media.url', $signedUrl)
+        ->assertJsonPath('top_posts.reactions.0.preview_metadata.thumbnail_url', $providerThumbnail)
+        ->assertJsonPath('top_posts.reactions.1.media', null)
+        ->assertJsonPath('top_posts.reactions.1.preview_metadata.thumbnail_url', $externalProviderThumbnail);
+    $this->withHeaders(['Authorization' => 'Bearer '.$access['plain_token']])
+        ->getJson(route('api.channels.insights.show', [$account, ...$range]))
+        ->assertOk()
+        ->assertJsonPath('summary.top_posts.reactions.0.media.url', $signedUrl)
+        ->assertJsonPath('summary.top_posts.reactions.1.media', null)
+        ->assertJsonPath('summary.top_posts.reactions.1.preview_metadata.thumbnail_url', $externalProviderThumbnail);
+    $this->withHeaders(['Authorization' => 'Bearer '.$access['plain_token']])
+        ->getJson(route('api.channels.insights.publications', [$account, ...$range]))
+        ->assertOk()
+        ->assertJsonPath('data.0.media.url', $signedUrl)
+        ->assertJsonPath('data.0.thumbnail_url', $signedUrl)
+        ->assertJsonPath('data.1.media', null)
+        ->assertJsonPath('data.1.thumbnail_url', $externalProviderThumbnail);
+
+    TryPostServer::actingAs($access['user'])
+        ->tool(GetAnalyticsReportTool::class, $range)
+        ->assertOk()
+        ->assertStructuredContent(fn (AssertableJson $json) => $json
+            ->where('top_posts.reactions.0.media.url', $signedUrl)
+            ->where('top_posts.reactions.0.preview_metadata.thumbnail_url', $providerThumbnail)
+            ->where('top_posts.reactions.1.media', null)
+            ->where('top_posts.reactions.1.preview_metadata.thumbnail_url', $externalProviderThumbnail)
+            ->etc());
+    TryPostServer::actingAs($access['user'])
+        ->tool(GetChannelInsightsTool::class, ['account_id' => $account->id, ...$range])
+        ->assertOk()
+        ->assertStructuredContent(fn (AssertableJson $json) => $json
+            ->where('summary.top_posts.reactions.0.media.url', $signedUrl)
+            ->where('summary.top_posts.reactions.1.media', null)
+            ->where('summary.top_posts.reactions.1.preview_metadata.thumbnail_url', $externalProviderThumbnail)
+            ->etc());
+    TryPostServer::actingAs($access['user'])
+        ->tool(ListChannelPublicationsTool::class, ['account_id' => $account->id, ...$range])
+        ->assertOk()
+        ->assertStructuredContent(fn (AssertableJson $json) => $json
+            ->where('publications.0.media.url', $signedUrl)
+            ->where('publications.0.thumbnail_url', $signedUrl)
+            ->where('publications.1.media', null)
+            ->where('publications.1.thumbnail_url', $externalProviderThumbnail)
+            ->etc());
 });
 
 test('API and MCP validate analytics date selections like the web', function () {

@@ -72,16 +72,16 @@ class GitHubController extends Controller
             ->first();
 
         if ($existing) {
-            return redirect()->route('app.authentication.edit')
-                ->with('flash.error', __('settings.authentication.providers.flash_already_linked', ['provider' => 'GitHub']));
+            return redirect()->route('app.profile.edit', ['tab' => 'login'])
+                ->with('flash.error', __('settings.profile.providers.flash_already_linked', ['provider' => 'GitHub']));
         }
 
         if ($user->github_id !== $githubId) {
             $user->update(['github_id' => $githubId]);
         }
 
-        return redirect()->route('app.authentication.edit')
-            ->with('flash.success', __('settings.authentication.providers.flash_connected', ['provider' => 'GitHub']));
+        return redirect()->route('app.profile.edit', ['tab' => 'login'])
+            ->with('flash.success', __('settings.profile.providers.flash_connected', ['provider' => 'GitHub']));
     }
 
     private function loginExistingUser(User $user, string $githubId): RedirectResponse
@@ -103,7 +103,7 @@ class GitHubController extends Controller
             return redirect()->route('app.invites.show', $invite);
         }
 
-        return redirect()->route('app.home');
+        return redirect()->intended(route('app.calendar'));
     }
 
     private function registerNewUser(\Laravel\Socialite\Contracts\User $githubUser): RedirectResponse
@@ -124,6 +124,7 @@ class GitHubController extends Controller
             'email_verified_at' => now(),
             'is_invite' => $invite !== null,
             'registration_ip' => request()->ip(),
+            'locale' => data_get($preferences, 'locale'),
             'timezone' => data_get($preferences, 'timezone'),
             'week_starts_on' => data_get($preferences, 'week_starts_on'),
             'time_format' => data_get($preferences, 'time_format'),

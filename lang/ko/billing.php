@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 return [
     'title' => '결제',
 
@@ -12,7 +14,6 @@ return [
     'subscribe' => [
         'billed_monthly' => '월간 결제',
         'prices' => [
-            'first_month' => '$1',
             'socials' => ['monthly' => '$19', 'yearly_per_month' => '$15.83', 'yearly' => '$190'],
             'workspaces' => ['monthly' => '$99', 'yearly_per_month' => '$82.50', 'yearly' => '$990'],
         ],
@@ -24,6 +25,7 @@ return [
         'yearly' => '연간',
         'save_two_months' => '2개월 무료',
         'per_month' => '/월',
+        'per_year' => '/년',
         'workspaces_one' => '워크스페이스 하나',
         'workspaces_unlimited' => '무제한 워크스페이스',
         'workspaces_tooltip' => '워크스페이스는 브랜드나 고객 하나를 나머지와 분리한 공간입니다. 소셜 계정, 서명, 라벨, 분석, 멤버 권한, MCP 연결을 각각 따로 가집니다.',
@@ -33,54 +35,70 @@ return [
         'select' => ':plan 선택',
         'upgrade' => ':plan(으)로 업그레이드',
         'downgrade' => ':plan(으)로 다운그레이드',
-        'start_first_month' => ':price에 시작하기',
-        'per_first_month' => '/첫 달',
-        'then_monthly' => '이후 :price/월',
         'billed_yearly_total' => '연간 결제 · :price (2개월 무료)',
         'socials_tagline' => '크리에이터와 소규모 브랜드에 적합.',
         'workspaces_tagline' => '에이전시와 대규모 비즈니스에 적합.',
         'everything_included' => '모두 포함',
         'features' => [
             'networks_all' => '모든 소셜 네트워크 포함',
-            'networks_all_tooltip' => '이 모든 네트워크에 게시할 수 있습니다.',
+            'networks_all_tooltip' => '한 곳에서 모두에 게시하세요.',
             'accounts_unlimited' => '소셜 계정 무제한',
             'accounts_unlimited_tooltip' => '원하는 만큼 계정을 연결할 수 있고, 같은 네트워크 여러 개도 가능합니다. 예를 들어 인스타그램 3개.',
-            'calendar' => '캘린더: 월·주 보기',
-            'calendar_tooltip' => '한 달을 한눈에: 계획 중, 예약됨, 이미 게시된 게시물을 모두 볼 수 있습니다. 자세히 보려면 주 보기로 전환하세요.',
-            'ai' => 'TryPost Copilot',
-            'ai_tooltip' => '게시물 작성과 검토를 돕는 AI 어시스턴트.',
-            'mcp' => 'MCP: Claude, ChatGPT, Grok에서 게시',
-            'mcp_tooltip' => 'Claude, ChatGPT, Grok을 워크스페이스에 연결하세요. 게시물 작성과 예약, 지표 조회, 성과가 좋았던 게시물 파악, 내 데이터를 바탕으로 다음 콘텐츠 계획까지 맡길 수 있습니다.',
-            'repurpose' => 'Repurpose: 게시물 하나를 여러 개로',
-            'repurpose_tooltip' => '원본 계정을 선택하세요. 거기에 올리는 모든 새 게시물이 다른 네트워크에 자동으로 다시 게시됩니다. TryPost를 열 필요가 없어요.',
-            'analytics' => '분석',
-            'analytics_tooltip' => '노출, 도달, 좋아요, 댓글 같은 지표를 모든 게시물과 계정별로 한곳에서 확인하세요.',
-            'team' => '멤버 수 무제한',
+            'calendar' => '콘텐츠 캘린더',
+            'ideas' => '콘텐츠 기획',
+            'ideas_tooltip' => '아이디어를 적어 두고 한곳에서 정리한 뒤, 좋은 아이디어는 언제든 콘텐츠로 만드세요.',
+            'calendar_tooltip' => '예약된 게시물과 게시된 게시물을 한곳에서 월별 또는 주별로 확인하세요.',
+            'ai' => 'AI 글쓰기 어시스턴트',
+            'ai_tooltip' => 'AI로 게시물을 쓰고, 다시 쓰고, 톤을 조정하세요. 내 언어로요.',
+            'mcp' => 'Claude나 ChatGPT에서 TryPost 사용',
+            'mcp_tooltip' => 'Claude, ChatGPT 또는 다른 AI를 연결하세요. 게시물 작성과 예약, 대기열 채우기, 아이디어 정리, 성장 확인을 요청할 수 있어요.',
+            'repurpose' => '동영상 자동 재게시',
+            'repurpose_tooltip' => 'Instagram에 동영상을 올렸나요? TryPost가 TikTok, YouTube, Facebook 등 다른 네트워크에 자동으로 재게시해요.',
+            'analytics' => '고급 분석',
+            'analytics_tooltip' => '총 팔로워 수처럼 모든 네트워크를 한눈에 보거나, 네트워크별·게시물별로 필터링하세요. 조회수, 도달, 좋아요, 댓글 등으로 무엇이 효과적인지 알 수 있어요.',
+            'team' => '팀원 무제한',
             'team_tooltip' => '추가 비용 없이 팀에 원하는 만큼 초대하세요. 각자가 할 수 있는 일을 정하고 게시 전에 승인할 수 있습니다.',
         ],
     ],
 
     'current_plan' => [
+        'statuses' => [
+            'active' => '활성',
+            'trial' => '무료 체험',
+            'cancelling' => '취소됨',
+            'past_due' => '연체',
+        ],
         'change' => '요금제 변경',
-        'price_monthly' => ':price/월',
-        'price_yearly' => ':price/년',
+        'subscribe' => '지금 구독하기',
         'trial_until' => ':date까지 체험',
-        'renews' => '자동 갱신',
         'cancelled' => '취소됨, :date에 종료',
-        'workspaces_usage' => '워크스페이스: :count / :limit',
+        'discount_until' => ':date까지 :discount 할인',
+        'discount_forever' => '매 결제 시 :discount 할인',
+        'discount_once' => '다음 결제 시 :discount 할인',
     ],
 
     'subscription' => [
         'title' => '결제 수단',
+        'default' => '기본',
         'description' => '카드나 청구 정보는 Stripe에서 업데이트하세요.',
         'no_payment_method' => '아직 등록된 결제 수단이 없습니다.',
         'expires_on' => ':month/:year 만료',
         'manage_stripe' => 'Stripe에서 관리',
     ],
 
+    'tabs' => [
+        'plan' => '요금제',
+        'invoices' => '청구서',
+    ],
+
     'invoices' => [
-        'title' => '청구서',
-        'description' => '지난 청구서를 다운로드하세요.',
+        'columns' => [
+            'date' => '날짜',
+            'amount' => '금액',
+            'status' => '상태',
+        ],
+        'empty_title' => '아직 청구서가 없습니다',
+        'empty_description' => '첫 결제 후 청구서가 여기에 표시됩니다.',
         'paid' => '결제 완료',
         'download' => '인보이스 다운로드',
     ],

@@ -17,32 +17,6 @@ use App\Models\WorkspaceLabel;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Queue;
 
-function waitForInsightsFilterTestId(mixed $page, string $testId): void
-{
-    $page->script(<<<JS
-        (async () => {
-            const selector = '[data-testid="{$testId}"]';
-            for (let attempt = 0; attempt < 600; attempt++) {
-                const element = document.querySelector(selector);
-                if (element && element.getBoundingClientRect().height > 0) return;
-                await new Promise((resolve) => setTimeout(resolve, 50));
-            }
-        })();
-    JS);
-}
-
-function waitForInsightsFilterScript(mixed $page, string $condition): void
-{
-    $page->script(<<<JS
-        (async () => {
-            for (let attempt = 0; attempt < 200; attempt++) {
-                if ({$condition}) return;
-                await new Promise((resolve) => setTimeout(resolve, 50));
-            }
-        })();
-    JS);
-}
-
 function insightsFilterPublication(SocialAccount $account, User $user, CarbonImmutable $publishedAt, int $reactions, ?ContentType $contentType, ?WorkspaceLabel $label = null, PublicationContentType $publicationType = PublicationContentType::Image): AnalyticsPublication
 {
     $post = null;
@@ -98,22 +72,25 @@ beforeEach(function () {
 
 test('the post type filter lists this platform types and narrows the URL and the totals', function () {
     $page = visit(route('app.channels.insights', $this->instagram));
-    waitForInsightsFilterTestId($page, 'insights-post-type-filter');
+    waitFor($page, '@insights-post-type-filter');
 
     $page->assertScript('document.querySelectorAll("#insights-posts-body tr").length', 3)
         ->click('@insights-post-type-filter');
-    waitForInsightsFilterTestId($page, 'insights-post-type-option-instagram_story');
+    waitFor($page, '@insights-post-type-option-instagram_story');
 
     $page->assertScript('Array.from(document.querySelectorAll("[data-testid^=insights-post-type-option-]")).map((element) => element.dataset.testid.replace("insights-post-type-option-", "")).join(",")', 'instagram_feed,instagram_reel,instagram_story')
         ->click('@insights-post-type-option-instagram_story');
-    waitForInsightsFilterScript($page, 'Array.from(new URLSearchParams(location.search)).filter(([key]) => key.startsWith("types[")).map(([, value]) => value).join(",") === "instagram_story" && document.querySelectorAll("#insights-posts-body tr").length === 1 && document.querySelector("[data-testid=insights-card-posts] .font-heading").textContent.trim() === "1"');
+    waitForCondition($page, 'Array.from(new URLSearchParams(location.search)).filter(([key]) => key.startsWith("types[")).map(([, value]) => value).join(",") === "instagram_story"');
+    waitForCount($page, '#insights-posts-body tr', 1);
+    waitForState($page, '@insights-card-posts .font-heading', "element.textContent.trim() === '1'");
 
     $page->assertScript('Array.from(new URLSearchParams(location.search)).filter(([key]) => key.startsWith("types[")).map(([, value]) => value).join(",")', 'instagram_story')
         ->assertScript('document.querySelectorAll("#insights-posts-body tr").length', 1)
         ->assertPresent("@insights-posts-row-{$this->story->id}")
         ->assertScript('document.querySelector("[data-testid=insights-card-posts] .font-heading").textContent.trim()', '1')
         ->click('@insights-post-type-clear');
-    waitForInsightsFilterScript($page, '!location.search.includes("types") && document.querySelectorAll("#insights-posts-body tr").length === 3');
+    waitForCondition($page, '!location.search.includes("types")');
+    waitForCount($page, '#insights-posts-body tr', 3);
 
     $page->assertScript('location.search.includes("types")', false)
         ->assertScript('document.querySelectorAll("#insights-posts-body tr").length', 3)
@@ -122,19 +99,21 @@ test('the post type filter lists this platform types and narrows the URL and the
 
 test('history navigation re-syncs the label filter with the page', function () {
     $page = visit(route('app.channels.insights', $this->instagram));
-    waitForInsightsFilterTestId($page, 'insights-label-filter');
+    waitFor($page, '@insights-label-filter');
 
     $page->script('window.__labelTrigger0 = document.querySelector("[data-testid=insights-label-filter]").textContent.trim()');
     $page->click('@insights-range-7d');
-    waitForInsightsFilterScript($page, 'new URLSearchParams(location.search).get("range") === "7d"');
+    waitForQueryParameter($page, 'range', '7d');
     $page->click('@insights-label-filter');
-    waitForInsightsFilterTestId($page, "insights-label-option-{$this->label->id}");
+    waitFor($page, "@insights-label-option-{$this->label->id}");
     $page->click("@insights-label-option-{$this->label->id}");
-    waitForInsightsFilterScript($page, 'location.search.includes("labels") && document.querySelectorAll("#insights-posts-body tr").length === 1');
+    waitForCondition($page, 'location.search.includes("labels")');
+    waitForCount($page, '#insights-posts-body tr', 1);
     $page->assertScript('document.querySelector("[data-testid=insights-label-filter]").textContent.trim() !== window.__labelTrigger0', true);
 
     $page->script('history.back()');
-    waitForInsightsFilterScript($page, '!location.search.includes("range=7d") && !location.search.includes("labels") && document.querySelectorAll("#insights-posts-body tr").length === 3');
+    waitForCondition($page, '!location.search.includes("range=7d") && !location.search.includes("labels")');
+    waitForCount($page, '#insights-posts-body tr', 3);
 
     $page->assertScript('document.querySelector("[data-testid=insights-label-filter]").textContent.trim() === window.__labelTrigger0', true)
         ->assertNoJavaScriptErrors();
@@ -142,7 +121,7 @@ test('history navigation re-syncs the label filter with the page', function () {
 
 test('on a phone both filters show only their icon and chevron', function () {
     $page = visit(route('app.channels.insights', $this->instagram))->resize(390, 844);
-    waitForInsightsFilterTestId($page, 'insights-post-type-filter');
+    waitFor($page, '@insights-post-type-filter');
 
     foreach (['insights-label-filter', 'insights-post-type-filter'] as $filter) {
         $page->assertScript("Array.from(document.querySelectorAll('[data-testid=\"{$filter}\"] > span')).filter((element) => element.getBoundingClientRect().width > 0 && element.textContent.trim() !== '').length", 0)
@@ -150,5 +129,90 @@ test('on a phone both filters show only their icon and chevron', function () {
     }
 
     $page->assertScript('document.documentElement.scrollWidth <= window.innerWidth', true)
+        ->assertNoJavaScriptErrors();
+});
+
+test('the post type filter search matches each word typed in any order and ignores case', function () {
+    $page = visit(route('app.channels.insights', $this->instagram));
+    waitFor($page, '@insights-post-type-filter');
+    $page->click('@insights-post-type-filter');
+    waitFor($page, '@insights-post-type-search');
+
+    $page->type('@insights-post-type-search', 'POST feed');
+    waitForGone($page, '@insights-post-type-option-instagram_reel');
+
+    $page->assertScript('Array.from(document.querySelectorAll("[data-testid^=insights-post-type-option-]")).map((element) => element.dataset.testid.replace("insights-post-type-option-", "")).join(",")', 'instagram_feed')
+        ->assertNoJavaScriptErrors();
+});
+
+test('a YouTube channel shows no post type filter and no type tag', function (Platform $platform, ContentType $contentType, PublicationContentType $publicationType) {
+    $channel = SocialAccount::factory()->create(['workspace_id' => $this->instagram->workspace_id, 'platform' => $platform]);
+    $publication = insightsFilterPublication($channel, $this->user, CarbonImmutable::today('UTC')->subDays(2)->setTime(10, 0), 10, $contentType, publicationType: $publicationType);
+
+    $page = visit(route('app.channels.insights', $channel));
+    waitFor($page, "@insights-posts-row-{$publication->id}");
+
+    $page->assertVisible('@insights-label-filter')
+        ->assertMissing('@insights-post-type-filter')
+        ->assertMissing("@insights-posts-type-{$publication->id}")
+        ->assertNoJavaScriptErrors();
+})->with([
+    'YouTube' => [Platform::YouTube, ContentType::YouTubeShort, PublicationContentType::Short],
+]);
+
+test('a channel without the post type filter keeps the type tag', function (Platform $platform, ContentType $contentType) {
+    $channel = SocialAccount::factory()->create(['workspace_id' => $this->instagram->workspace_id, 'platform' => $platform]);
+    $publication = insightsFilterPublication($channel, $this->user, CarbonImmutable::today('UTC')->subDays(2)->setTime(10, 0), 10, $contentType, publicationType: PublicationContentType::Video);
+
+    $page = visit(route('app.channels.insights', $channel));
+    waitFor($page, "@insights-posts-row-{$publication->id}");
+
+    $page->assertVisible('@insights-label-filter')
+        ->assertMissing('@insights-post-type-filter')
+        ->assertVisible("@insights-posts-type-{$publication->id}")
+        ->assertNoJavaScriptErrors();
+})->with([
+    'X' => [Platform::X, ContentType::XPost],
+    'Threads' => [Platform::Threads, ContentType::ThreadsPost],
+    'Bluesky' => [Platform::Bluesky, ContentType::BlueskyPost],
+    'Mastodon' => [Platform::Mastodon, ContentType::MastodonPost],
+]);
+
+test('a TikTok channel keeps the post type filter but shows no type tag', function () {
+    $channel = SocialAccount::factory()->create(['workspace_id' => $this->instagram->workspace_id, 'platform' => Platform::TikTok]);
+    $publication = insightsFilterPublication($channel, $this->user, CarbonImmutable::today('UTC')->subDays(2)->setTime(10, 0), 10, ContentType::TikTokPhoto, publicationType: PublicationContentType::Video);
+
+    $page = visit(route('app.channels.insights', $channel));
+    waitFor($page, "@insights-posts-row-{$publication->id}");
+
+    $page->assertVisible('@insights-post-type-filter')
+        ->assertMissing("@insights-posts-type-{$publication->id}")
+        ->assertNoJavaScriptErrors();
+});
+
+test('the post type filter leaves a gap between the search and the first type', function () {
+    $page = visit(route('app.channels.insights', $this->instagram));
+    waitFor($page, '@insights-post-type-filter');
+    $page->click('@insights-post-type-filter');
+    waitFor($page, '@insights-post-type-option-instagram_feed');
+
+    $page->assertScript('document.querySelector("[data-testid=insights-post-type-option-instagram_feed]").getBoundingClientRect().top - document.querySelector("[data-testid=insights-post-type-search]").getBoundingClientRect().bottom >= 8', true)
+        ->assertNoJavaScriptErrors();
+});
+
+test('a type already in the URL keeps the post type filter on a network without it so it can be cleared', function () {
+    $channel = SocialAccount::factory()->create(['workspace_id' => $this->instagram->workspace_id, 'platform' => Platform::Threads]);
+    $publication = insightsFilterPublication($channel, $this->user, CarbonImmutable::today('UTC')->subDays(2)->setTime(10, 0), 10, ContentType::ThreadsPost);
+
+    $page = visit(route('app.channels.insights', ['account' => $channel, 'types' => [ContentType::ThreadsGhostPost->value]]));
+    waitFor($page, '@insights-post-type-filter');
+
+    $page->click('@insights-post-type-filter');
+    waitFor($page, '@insights-post-type-clear');
+    $page->click('@insights-post-type-clear');
+    waitFor($page, "@insights-posts-row-{$publication->id}");
+
+    $page->assertVisible("@insights-posts-row-{$publication->id}")
+        ->assertMissing('@insights-post-type-filter')
         ->assertNoJavaScriptErrors();
 });

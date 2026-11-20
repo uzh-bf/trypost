@@ -7,6 +7,8 @@ return [
     'description' => 'Bu çalışma alanının kanallarını yönetin.',
     'connect' => 'Kanal bağla',
     'settings' => 'Kanal ayarları',
+    'manage' => 'Kanalları yönet',
+    'set_goal' => 'Paylaşım hedefi belirle',
     'publish' => 'Yayınla',
     'insights' => 'Insights',
     'new_post' => 'Bu kanalda yeni gönderi',
@@ -16,14 +18,13 @@ return [
     'connection_lost_hint' => 'Yayın yapmaya devam etmek için bu kanalı yeniden bağlayın.',
     'reconnect' => 'Yeniden bağla',
     'refresh_connection' => 'Bağlantıyı yenile',
+    'link_facebook_page' => 'Bir Facebook Sayfasına bağla',
     'view_profile' => 'Profili görüntüle',
     'disconnect' => 'Bağlantıyı kes',
     'actions' => 'Kanal işlemleri',
 
     'reorder' => [
         'handle' => ':name öğesini sürükleyerek sırala',
-        'move_up' => 'Yukarı taşı',
-        'move_down' => 'Aşağı taşı',
         'failed' => 'Kanallarınız yeniden sıralanamadı. Tekrar deneyin.',
         'stale' => 'Sayfayı yüklediğinizden beri kanallarınız değişti. Yenileyip tekrar deneyin.',
     ],
@@ -169,6 +170,25 @@ return [
         'description' => 'Bu işlem, taslaklar, zamanlanmış gönderiler ve yayın geçmişi dahil olmak üzere bu kanalın TryPost’taki tüm gönderilerini siler. Ağda zaten bulunan gönderiler orada kalır.',
         'keyword' => 'bağlantıyı kes',
         'cancel' => 'İptal',
+    ],
+
+    'list' => [
+        'search' => 'Ada, @kullanıcı adına veya ağa göre ara',
+        'networks' => 'Ağlar',
+        'networks_search' => 'Ağ ara',
+        'no_networks' => 'Ağ bulunamadı',
+        'columns' => [
+            'channel' => 'Kanal',
+            'timezone' => 'Saat dilimi',
+            'posting_times' => 'Saatler',
+            'this_week' => 'Bu hafta',
+        ],
+        'posting_times_per_week' => 'Haftada :count',
+        'no_posting_times' => 'Saat yok',
+        'no_results' => 'Aramanızla eşleşen kanal yok.',
+        'connection_lost' => 'Bu kanalın bağlantısı koptu',
+        'settings' => 'Ayarlar',
+        'more_actions' => 'Diğer işlemler',
     ],
 
     'settings_page' => [

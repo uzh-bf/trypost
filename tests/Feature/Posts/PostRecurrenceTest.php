@@ -17,9 +17,11 @@ use App\Models\SocialAccount;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceLabel;
+use App\Services\Social\Discord\DiscordClient;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Queue;
+use Mockery\MockInterface;
 
 beforeEach(function () {
     Queue::fake();
@@ -296,6 +298,24 @@ test('the series follows the channel time zone across daylight saving changes', 
     'lisbon, spring forward' => ['Europe/Lisbon', '2027-03-24 10:00', '2027-03-24 10:05', '2027-03-31 10:00'],
 ]);
 
+test('the series follows the canonical zone of a channel stored with a legacy alias', function () {
+    $year = now('UTC')->year + 1;
+    $this->channel->update(['timezone' => 'Canada/East-Saskatchewan']);
+    $start = CarbonImmutable::parse("{$year}-01-30 20:00", 'America/Regina');
+    $this->travelTo($start->addMinutes(5));
+    $post = recurringPost($this->channel, $this->user, [
+        'scheduled_at' => $start->utc(),
+        'recurrence_interval' => 1,
+        'recurrence_frequency' => RecurrenceFrequency::Month,
+        'recurrence_remaining' => 2,
+    ]);
+
+    publishRecurringPost($post);
+
+    expect(nextOccurrence($post)->scheduled_at->setTimezone('America/Regina')->format('Y-m-d H:i'))
+        ->toBe(CarbonImmutable::parse("{$year}-02-01", 'America/Regina')->endOfMonth()->format('Y-m-d').' 20:00');
+});
+
 test('the last occurrence carries no rule and ends the series', function () {
     $post = recurringPost($this->channel, $this->user, [
         'scheduled_at' => now()->subMinute(),
@@ -316,6 +336,34 @@ test('the last occurrence carries no rule and ends the series', function () {
 
     expect(Post::count())->toBe(2);
 });
+
+test('the next occurrence of a Discord post reads the channel name from the cached list', function (?array $cached, array $expected) {
+    $discord = SocialAccount::factory()->create([
+        'workspace_id' => $this->workspace->id,
+        'platform' => Platform::Discord,
+        'platform_user_id' => '999',
+        'timezone' => 'UTC',
+    ]);
+    $this->mock(DiscordClient::class, function (MockInterface $client) use ($cached): void {
+        $client->shouldReceive('cachedChannels')->andReturn($cached);
+        $client->shouldNotReceive('channels');
+    });
+    $post = recurringPost($discord, $this->user, [
+        'content_type' => ContentType::DiscordMessage,
+        'scheduled_at' => now()->subMinute(),
+        'recurrence_interval' => 1,
+        'recurrence_frequency' => RecurrenceFrequency::Day,
+        'recurrence_remaining' => 3,
+        'meta' => ['channel_id' => '111', 'channel_name' => 'old-name'],
+    ]);
+
+    publishRecurringPost($post);
+
+    expect(nextOccurrence($post)->meta)->toEqual($expected);
+})->with([
+    'cached list' => [[['id' => '111', 'name' => 'general']], ['channel_id' => '111', 'channel_name' => 'general']],
+    'nothing cached' => [null, ['channel_id' => '111']],
+]);
 
 test('a retried settlement never creates a second occurrence', function () {
     $post = recurringPost($this->channel, $this->user, [
@@ -658,3 +706,26 @@ test('an author who left the workspace hands the next occurrence to the workspac
 
     expect(nextOccurrence($post)->user_id)->toBe($this->user->id);
 });
+
+test('the next occurrence of a recurring poll keeps its poll', function (string $platform, ContentType $type, array $poll) {
+    $account = SocialAccount::factory()->{$platform}()->create(['workspace_id' => $this->workspace->id, 'timezone' => 'UTC']);
+    $post = recurringPost($account, $this->user, [
+        'content_type' => $type,
+        'content' => 'Tabs or spaces?',
+        'scheduled_at' => now()->subMinute(),
+        'recurrence_interval' => 1,
+        'recurrence_frequency' => RecurrenceFrequency::Day,
+        'recurrence_remaining' => 2,
+        'meta' => ['poll' => $poll],
+    ]);
+
+    publishRecurringPost($post);
+
+    expect(nextOccurrence($post))
+        ->content_type->toBe($type)
+        ->meta->toEqual(['poll' => $poll]);
+})->with([
+    'x' => ['x', ContentType::XPoll, ['options' => ['Tabs', 'Spaces'], 'duration_minutes' => 60]],
+    'mastodon' => ['mastodon', ContentType::MastodonPoll, ['options' => ['Tabs', 'Spaces'], 'duration_minutes' => 60, 'multiple' => true, 'hide_totals' => true]],
+    'threads' => ['threads', ContentType::ThreadsPoll, ['options' => ['Tabs', 'Spaces', 'Both']]],
+]);

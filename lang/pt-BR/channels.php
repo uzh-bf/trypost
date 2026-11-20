@@ -7,6 +7,8 @@ return [
     'description' => 'Gerencie os canais deste workspace.',
     'connect' => 'Conectar canal',
     'settings' => 'Configurações do canal',
+    'manage' => 'Gerenciar canais',
+    'set_goal' => 'Definir meta de postagem',
     'publish' => 'Publicar',
     'insights' => 'Insights',
     'new_post' => 'Novo post neste canal',
@@ -16,14 +18,13 @@ return [
     'connection_lost_hint' => 'Reconecte este canal para continuar publicando.',
     'reconnect' => 'Reconectar',
     'refresh_connection' => 'Atualizar conexão',
+    'link_facebook_page' => 'Vincular a uma Página do Facebook',
     'view_profile' => 'Ver perfil',
     'disconnect' => 'Desconectar',
     'actions' => 'Ações do canal',
 
     'reorder' => [
         'handle' => 'Arraste para reordenar :name',
-        'move_up' => 'Mover para cima',
-        'move_down' => 'Mover para baixo',
         'failed' => 'Não foi possível reordenar seus canais. Tente novamente.',
         'stale' => 'Seus canais mudaram desde que você abriu a página. Atualize e tente novamente.',
     ],
@@ -169,6 +170,25 @@ return [
         'description' => 'Isso apaga todos os posts deste canal no TryPost, incluindo rascunhos, agendados e o histórico de publicados. Os posts que já estão na rede continuam lá.',
         'keyword' => 'desconectar',
         'cancel' => 'Cancelar',
+    ],
+
+    'list' => [
+        'search' => 'Buscar por nome, @usuário ou rede',
+        'networks' => 'Redes',
+        'networks_search' => 'Buscar redes',
+        'no_networks' => 'Nenhuma rede encontrada',
+        'columns' => [
+            'channel' => 'Canal',
+            'timezone' => 'Fuso horário',
+            'posting_times' => 'Horários',
+            'this_week' => 'Esta semana',
+        ],
+        'posting_times_per_week' => ':count por semana',
+        'no_posting_times' => 'Sem horários',
+        'no_results' => 'Nenhum canal corresponde à sua busca.',
+        'connection_lost' => 'Este canal perdeu a conexão',
+        'settings' => 'Configurações',
+        'more_actions' => 'Mais ações',
     ],
 
     'settings_page' => [

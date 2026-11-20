@@ -11,6 +11,7 @@ use App\Enums\TikTok\PrivacyLevel;
 use App\Jobs\PublishPost;
 use App\Mcp\Servers\TryPostServer;
 use App\Mcp\Tools\Post\AttachMediaFromUploadTool;
+use App\Mcp\Tools\Post\AttachMediaFromUrlTool;
 use App\Mcp\Tools\Post\CreatePostTool;
 use App\Mcp\Tools\Post\GetPostTool;
 use App\Mcp\Tools\Post\PublishPostTool;
@@ -20,6 +21,8 @@ use App\Models\Post;
 use App\Models\SocialAccount;
 use App\Models\User;
 use App\Models\Workspace;
+use App\Support\Social\XPoll;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -166,20 +169,22 @@ test('update post merges per-platform meta', function () {
     $post = Post::factory()->forAccount($this->discordAccount)->create([
         'user_id' => $this->user->id,
         'status' => PostStatus::Draft,
-        'meta' => ['channel_name' => 'general'],
+        'meta' => ['channel_id' => '444555666', 'embeds' => [['title' => 'Release']]],
     ]);
 
     $response = TryPostServer::actingAs($this->user)
         ->tool(UpdatePostTool::class, [
             'post_id' => $post->id,
-            'meta' => ['channel_id' => '444555666'],
+            'meta' => ['mentions' => [['token' => '@everyone', 'label' => '@everyone']]],
         ]);
 
     $response->assertOk();
 
-    $meta = $post->fresh()->meta;
-    expect($meta['channel_id'])->toBe('444555666')
-        ->and($meta['channel_name'])->toBe('general'); // merged, not overwritten
+    expect($post->fresh()->meta)->toMatchArray([
+        'channel_id' => '444555666',
+        'embeds' => [['title' => 'Release']],
+        'mentions' => [['token' => '@everyone', 'label' => '@everyone']],
+    ]);
 });
 
 test('publish post rejects a Discord platform without a channel', function () {
@@ -1033,4 +1038,149 @@ test('publishing a youtube post with neither a title nor text is rejected in MCP
     TryPostServer::actingAs($this->user)->tool(PublishPostTool::class, ['post_id' => $post->id])
         ->assertHasErrors([__('posts.form.youtube.title_required')]);
     Queue::assertNotPushed(PublishPost::class);
+});
+
+test('create post persists instagram collaborators and trial reel meta', function () {
+    $instagram = SocialAccount::factory()->create(['workspace_id' => $this->workspace->id, 'platform' => Platform::Instagram]);
+
+    TryPostServer::actingAs($this->user)
+        ->tool(CreatePostTool::class, [
+            'content' => 'Reel',
+            'social_account_id' => $instagram->id,
+            'content_type' => ContentType::InstagramReel->value,
+            'meta' => ['collaborators' => ['@alice'], 'trial_graduation' => 'SS_PERFORMANCE'],
+        ])
+        ->assertOk();
+
+    expect(Post::where('social_account_id', $instagram->id)->sole()->meta)
+        ->toEqual(['collaborators' => ['alice'], 'trial_graduation' => 'SS_PERFORMANCE']);
+});
+
+test('publish post rejects instagram music on an account not connected through Facebook', function () {
+    $instagram = SocialAccount::factory()->create(['workspace_id' => $this->workspace->id, 'platform' => Platform::Instagram]);
+    $post = Post::factory()->forAccount($instagram, ContentType::InstagramReel)->create([
+        'user_id' => $this->user->id,
+        'status' => PostStatus::Draft,
+        'meta' => ['audio' => ['id' => '1234567890']],
+    ]);
+
+    TryPostServer::actingAs($this->user)
+        ->tool(PublishPostTool::class, ['post_id' => $post->id])
+        ->assertHasErrors([__('posts.form.instagram.music.requires_facebook')]);
+});
+
+test('an x poll is stored normalized through the create and update tools', function () {
+    $x = SocialAccount::factory()->x()->create(['workspace_id' => $this->workspace->id]);
+
+    TryPostServer::actingAs($this->user)->tool(CreatePostTool::class, [
+        'content' => 'Tabs or spaces?',
+        'social_account_id' => $x->id,
+        'content_type' => ContentType::XPoll->value,
+        'meta' => ['poll' => ['options' => [' Yes ', '', 'No'], 'duration_minutes' => 60]],
+    ])->assertOk();
+    $post = Post::where('social_account_id', $x->id)->sole();
+
+    expect($post->meta['poll'])->toEqual(['options' => ['Yes', 'No'], 'duration_minutes' => 60]);
+
+    TryPostServer::actingAs($this->user)->tool(UpdatePostTool::class, [
+        'post_id' => $post->id,
+        'content_type' => ContentType::XPost->value,
+    ])->assertOk();
+
+    expect($post->fresh()->meta)->not->toHaveKey('poll');
+});
+
+test('an x poll with invalid choices is refused by the create tool', function (array $poll, string $message, array $replace) {
+    $x = SocialAccount::factory()->x()->create(['workspace_id' => $this->workspace->id]);
+
+    TryPostServer::actingAs($this->user)->tool(CreatePostTool::class, [
+        'content' => 'Tabs or spaces?',
+        'social_account_id' => $x->id,
+        'content_type' => ContentType::XPoll->value,
+        'meta' => ['poll' => $poll],
+    ])->assertHasErrors([__($message, $replace)]);
+
+    $this->assertDatabaseMissing('posts', ['social_account_id' => $x->id]);
+})->with([
+    'five options' => [['options' => ['a', 'b', 'c', 'd', 'e'], 'duration_minutes' => 60], 'posts.form.poll.options_max', ['max' => XPoll::MAX_OPTIONS]],
+    'choice over 25 characters' => [['options' => [Str::repeat('a', 26), 'b'], 'duration_minutes' => 60], 'posts.form.poll.choice_max', ['max' => XPoll::OPTION_MAX_LENGTH]],
+    'repeated option' => [['options' => ['Yes', ' yes'], 'duration_minutes' => 60], 'posts.form.poll.options_distinct', []],
+]);
+
+test('an incomplete x poll cannot be scheduled through the create tool', function (?array $poll, string $message) {
+    $x = SocialAccount::factory()->x()->create(['workspace_id' => $this->workspace->id]);
+
+    TryPostServer::actingAs($this->user)->tool(CreatePostTool::class, [
+        'content' => 'Question',
+        'status' => PostStatus::Scheduled->value,
+        'scheduled_at' => now()->addDay()->toIso8601String(),
+        'social_account_id' => $x->id,
+        'content_type' => ContentType::XPoll->value,
+        'meta' => blank($poll) ? [] : ['poll' => $poll],
+    ])->assertHasErrors([__($message)]);
+})->with([
+    'no options' => [null, fn (): string => XPoll::optionsRequiredMessage()],
+    'no duration' => [['options' => ['Yes', 'No']], 'posts.form.poll.duration_required'],
+]);
+
+test('publish post refuses a stored x poll without options or duration', function (array $poll, string $message) {
+    $x = SocialAccount::factory()->x()->create(['workspace_id' => $this->workspace->id]);
+    $post = Post::factory()->forAccount($x, ContentType::XPoll)->create([
+        'user_id' => $this->user->id,
+        'content' => 'Question',
+        'status' => PostStatus::Draft,
+        'meta' => ['poll' => $poll],
+    ]);
+
+    TryPostServer::actingAs($this->user)
+        ->tool(PublishPostTool::class, ['post_id' => $post->id])
+        ->assertHasErrors([__($message)]);
+
+    expect($post->fresh()->status)->toBe(PostStatus::Draft);
+})->with([
+    'no options' => [[], fn (): string => XPoll::optionsRequiredMessage()],
+    'no duration' => [['options' => ['Yes', 'No']], 'posts.form.poll.duration_required'],
+]);
+
+test('the attach media tools refuse media on a poll', function (ContentType $type) {
+    $account = SocialAccount::factory()->{$type->platform()->value}()->create(['workspace_id' => $this->workspace->id]);
+    $post = Post::factory()->forAccount($account, $type)->create(['user_id' => $this->user->id, 'status' => PostStatus::Draft]);
+    $upload = Media::factory()->temporaryUpload($this->workspace)->stored()->create();
+    $storedMedia = Media::query()->count();
+    Http::fake();
+
+    TryPostServer::actingAs($this->user)->tool(AttachMediaFromUploadTool::class, [
+        'post_id' => $post->id,
+        'upload_token' => $upload->upload_token,
+    ])->assertHasErrors([__('posts.errors.media_not_accepted')]);
+
+    TryPostServer::actingAs($this->user)->tool(AttachMediaFromUrlTool::class, [
+        'post_id' => $post->id,
+        'urls' => [['url' => 'https://example.com/photo.png']],
+    ])->assertHasErrors([__('posts.errors.media_not_accepted')]);
+
+    expect($post->fresh()->media)->toBeEmpty()
+        ->and(Media::query()->count())->toBe($storedMedia);
+    Http::assertNothingSent();
+})->with([
+    'x' => [ContentType::XPoll],
+    'mastodon' => [ContentType::MastodonPoll],
+    'threads' => [ContentType::ThreadsPoll],
+]);
+
+test('the get post tool returns the poll of an x poll', function () {
+    $x = SocialAccount::factory()->x()->create(['workspace_id' => $this->workspace->id]);
+    $post = Post::factory()->forAccount($x, ContentType::XPoll)->create([
+        'user_id' => $this->user->id,
+        'content' => 'Tabs or spaces?',
+        'meta' => ['poll' => ['options' => ['Tabs', 'Spaces'], 'duration_minutes' => 60]],
+    ]);
+
+    TryPostServer::actingAs($this->user)->tool(GetPostTool::class, ['post_id' => $post->id])
+        ->assertOk()
+        ->assertStructuredContent(fn (AssertableJson $json) => $json
+            ->where('content_type', ContentType::XPoll->value)
+            ->where('meta.poll.options', ['Tabs', 'Spaces'])
+            ->where('meta.poll.duration_minutes', 60)
+            ->etc());
 });

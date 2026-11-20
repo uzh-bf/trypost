@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 return [
     'title' => 'Instellingen',
     'description' => 'Beheer je profiel- en accountinstellingen',
@@ -9,13 +11,11 @@ return [
         'groups' => [
             'personal' => 'Persoonlijk',
             'workspace' => 'Workspace',
-            'features' => 'Functies',
-            'developers' => 'Ontwikkelaars',
-            'account' => 'Account',
+            'content' => 'Content',
+            'integrations' => 'Integraties',
         ],
         'items' => [
             'profile' => 'Profiel',
-            'authentication' => 'Authenticatie',
             'notifications' => 'Meldingen',
             'preferences' => 'Voorkeuren',
             'general' => 'Algemeen',
@@ -24,7 +24,7 @@ return [
             'signatures' => 'Handtekeningen',
             'labels' => 'Labels',
             'webhooks' => 'Webhooks',
-            'api_keys' => 'API-sleutels',
+            'api_keys' => 'API',
             'mcp' => 'MCP',
             'billing' => 'Facturatie',
         ],
@@ -41,7 +41,7 @@ return [
         'account_disconnected' => 'Account losgekoppeld',
         'account_disconnected_description' => 'Ontvang een e-mail wanneer een social account wordt losgekoppeld',
         'post_note_added' => 'Nieuwe notitie bij een bericht',
-        'post_note_added_description' => 'Ontvang een e-mail wanneer een teamlid een notitie aan een bericht toevoegt',
+        'post_note_added_description' => 'Ontvang een e-mail wanneer een teamlid je noemt in een notitie of een notitie toevoegt aan een bericht dat je hebt gemaakt of becommentarieerd',
         'collaboration' => 'Samenwerking',
         'collaboration_description' => 'Ontvang e-mails over goedkeuringsverzoeken en goedgekeurde of afgewezen berichten',
         'save_failed' => 'De meldingsvoorkeuren konden niet worden opgeslagen. Probeer het opnieuw.',
@@ -100,27 +100,23 @@ return [
         'resend_verification' => 'Klik hier om de verificatiemail opnieuw te versturen.',
         'verification_sent' => 'Er is een nieuwe verificatielink naar je e-mailadres verstuurd.',
         'save' => 'Opslaan',
-    ],
-
-    'authentication' => [
-        'title' => 'Authenticatie',
-        'page_title' => 'Authenticatie-instellingen',
+        'tabs' => [
+            'profile' => 'Profiel',
+            'login' => 'Inloggen',
+            'sessions' => 'Sessies',
+        ],
         'sessions' => [
             'title' => 'Actieve sessies',
             'description' => 'Als je iets verdachts opmerkt, log dan uit op andere apparaten.',
             'unknown_browser' => 'Onbekende browser',
-            'unknown_ip' => 'Onbekend IP',
             'on' => 'op',
             'active_now' => 'Nu actief',
+            'last_activity' => 'Laatste activiteit :time',
             'log_out_others' => 'Uitloggen op andere apparaten',
             'modal_title' => 'Uitloggen op andere apparaten',
-            'modal_description_password' => 'Voer je huidige wachtwoord in om te bevestigen dat je op andere browsersessies wilt uitloggen.',
-            'modal_description_email' => 'Typ je e-mailadres om te bevestigen dat je op andere browsersessies wilt uitloggen.',
-            'password_placeholder' => 'Huidig wachtwoord',
-            'email_placeholder' => 'Je account-e-mailadres',
+            'modal_description' => 'Alle andere apparaten die op je account zijn ingelogd, worden uitgelogd. Deze sessie blijft actief.',
             'cancel' => 'Annuleren',
             'submit' => 'Uitloggen op andere apparaten',
-            'email_mismatch' => 'Het e-mailadres komt niet overeen met je account.',
             'flash_logged_out' => 'Je bent uitgelogd op andere apparaten.',
         ],
         'password' => [

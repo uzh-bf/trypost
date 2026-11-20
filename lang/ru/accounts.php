@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 return [
     'bluesky' => [
         'title' => 'Подключить Bluesky',
@@ -54,6 +56,7 @@ return [
         'description' => 'Возможности зависят от типа вашего аккаунта Instagram и выбранного способа подключения.',
         'professional_title' => 'Профессиональный',
         'professional_types' => '(Бизнес и Автор)',
+        'facebook_types' => '(связан со страницей Facebook)',
         'badge' => 'Автоматическая публикация',
         'features' => [
             'automatic' => [
@@ -64,11 +67,13 @@ return [
                 'title' => 'Метрики опубликованных постов',
                 'description' => 'Смотрите результаты прошлых постов',
             ],
+            'music' => [
+                'title' => 'Музыка в Reels',
+                'description' => 'Добавьте трек из библиотеки Instagram',
+            ],
         ],
         'connect' => 'Подключиться к Instagram',
         'convert_hint' => 'При необходимости Instagram предложит легко перейти на профессиональный аккаунт.',
-        'facebook_link' => 'Подключите Instagram через Facebook',
-        'facebook_suffix' => '(если ваш аккаунт Instagram сейчас связан с Facebook).',
         'help' => [
             'account_type' => 'Как узнать тип аккаунта Instagram',
             'convert' => 'Как перевести аккаунт Instagram в профессиональный',
