@@ -12,6 +12,7 @@ use App\Mcp\Concerns\AuthorizesMcpTool;
 use App\Models\SocialAccount;
 use App\Models\Workspace;
 use App\Support\Analytics\ChannelMetrics;
+use App\Support\Analytics\ExternalAnalyticsMedia;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Validation\Rule;
 use Laravel\Mcp\Request;
@@ -70,7 +71,9 @@ class ListChannelPublicationsTool extends Tool
         ['filters' => $filters, 'publications' => $publications] = $this->insights->publications($account, $request->user(), $validated, (int) data_get($validated, 'page', 1));
 
         return Response::structured([
-            'publications' => ChannelPublicationPerformanceResource::collection($publications->items())->resolve(),
+            'publications' => ChannelPublicationPerformanceResource::collection(
+                ExternalAnalyticsMedia::publications($publications, $workspace->id)->items(),
+            )->resolve(),
             'filters' => $filters,
             'total' => $publications->total(),
             'per_page' => $publications->perPage(),

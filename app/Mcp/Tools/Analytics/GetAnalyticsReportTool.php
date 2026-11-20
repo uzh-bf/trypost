@@ -10,6 +10,7 @@ use App\Actions\Analytics\ResolveAnalyticsRangePreset;
 use App\Dto\Analytics\PublicationFilter;
 use App\Mcp\Concerns\AuthorizesMcpTool;
 use App\Models\Workspace;
+use App\Support\Analytics\ExternalAnalyticsMedia;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Support\ValidatedInput;
 use Illuminate\Validation\Rule;
@@ -59,13 +60,16 @@ class GetAnalyticsReportTool extends Tool
         ['selection' => $selection, 'clamped' => $clamped] = $this->presets->selection($validated, $user->timezone);
         ['keys' => $channelKeys] = $this->channelFilter->execute($workspace, collect($request->get('channels', [])));
 
-        return Response::structured($this->analytics->forSelection(
-            $workspace,
-            $selection,
-            $channelKeys,
-            $clamped,
-            weekStart: $user->week_starts_on,
-            filter: PublicationFilter::labelsFrom(new ValidatedInput($validated)),
+        return Response::structured(ExternalAnalyticsMedia::report(
+            $this->analytics->forSelection(
+                $workspace,
+                $selection,
+                $channelKeys,
+                $clamped,
+                weekStart: $user->week_starts_on,
+                filter: PublicationFilter::labelsFrom(new ValidatedInput($validated)),
+            ),
+            $workspace->id,
         ));
     }
 

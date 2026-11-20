@@ -12,6 +12,7 @@ use App\Mcp\Concerns\AuthorizesMcpTool;
 use App\Models\SocialAccount;
 use App\Models\Workspace;
 use App\Support\Analytics\ChannelMetrics;
+use App\Support\Analytics\ExternalAnalyticsMedia;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Validation\Rule;
 use Laravel\Mcp\Request;
@@ -66,7 +67,10 @@ class GetChannelInsightsTool extends Tool
             'types.*' => [Rule::in(PublicationFilter::typesFor($account->platform))],
         ]);
 
-        return Response::structured((new ChannelInsightsResource($this->insights->handle($account, $request->user(), $validated)))->resolve());
+        return Response::structured((new ChannelInsightsResource(ExternalAnalyticsMedia::channelInsights(
+            $this->insights->handle($account, $request->user(), $validated),
+            $workspace->id,
+        )))->resolve());
     }
 
     /**

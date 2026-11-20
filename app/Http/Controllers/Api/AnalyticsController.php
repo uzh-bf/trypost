@@ -10,6 +10,7 @@ use App\Actions\Analytics\ResolveAnalyticsChannelFilter;
 use App\Actions\Analytics\ResolveAnalyticsRangePreset;
 use App\Dto\Analytics\PublicationFilter;
 use App\Http\Requests\Api\Analytics\ShowAnalyticsReportRequest;
+use App\Support\Analytics\ExternalAnalyticsMedia;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -27,13 +28,16 @@ class AnalyticsController extends Controller
         ['selection' => $selection, 'clamped' => $clamped] = $presets->selection($request->validated(), $request->user()->timezone);
         ['keys' => $channelKeys] = $channelFilter->execute($workspace, $request->collect('channels'));
 
-        return response()->json($analytics->forSelection(
-            $workspace,
-            $selection,
-            $channelKeys,
-            $clamped,
-            weekStart: $request->user()->week_starts_on,
-            filter: PublicationFilter::labelsFrom($request->safe()),
+        return response()->json(ExternalAnalyticsMedia::report(
+            $analytics->forSelection(
+                $workspace,
+                $selection,
+                $channelKeys,
+                $clamped,
+                weekStart: $request->user()->week_starts_on,
+                filter: PublicationFilter::labelsFrom($request->safe()),
+            ),
+            $workspace->id,
         ));
     }
 
